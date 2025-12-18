@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Console</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f7f7; }
+    h1 { margin-bottom: 0.5rem; }
+    .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    label { display: inline-block; margin-right: 0.5rem; }
+    input[type="text"] { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 0.4rem 0.9rem; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { padding: 0.6rem; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #fafafa; }
+    .status { margin-top: 1rem; font-size: 0.9rem; color: #444; }
+    .value-input { width: 100%; box-sizing: border-box; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .tab-btn { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; background: #eee; cursor: pointer; color: #333; }
+    .tab-btn.active { background: #fff; border-bottom: 2px solid #007bff; color: #000; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .flex-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .flex-row label { margin-right: 0; }
+    form { margin-top: 1rem; }
+    input[type="number"] { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
+    select { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
+    .form-actions { display: flex; gap: 0.5rem; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Admin Console</h1>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="configTab">Config</button>
+      <button class="tab-btn" data-tab="locationsTab">Locations</button>
+    </div>
+
+    <div id="configTab" class="tab-panel active">
+      <h2>Config Constants</h2>
+      <div>
+        <label for="token">Admin Token:</label>
+        <input type="text" id="token" placeholder="Enter token" />
+        <button id="loadBtn">Load Config</button>
+      </div>
+      <table id="configTable" style="display:none;">
+        <thead>
+          <tr><th>Key</th><th>Description</th><th>Value</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div id="locationsTab" class="tab-panel">
+      <h2>Locations</h2>
+      <h3>Add Location</h3>
+      <form id="locationForm" class="flex-row">
+        <label>Name<input type="text" id="newName" required /></label>
+        <label>Country<input type="text" id="newCountry" required /></label>
+        <label>Region<input type="text" id="newRegion" /></label>
+        <label>Latitude<input type="number" step="0.0001" id="newLat" required /></label>
+        <label>Longitude<input type="number" step="0.0001" id="newLon" required /></label>
+        <label>Time Zone<input type="text" id="newTz" placeholder="e.g. America/Denver" required /></label>
+        <label>Is Ski Resort?
+          <select id="newResort">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+        </label>
+        <input type="hidden" id="editingId" />
+        <div class="form-actions">
+          <button type="submit" id="saveLocationBtn">Add</button>
+          <button type="button" id="cancelEditBtn" style="display:none;">Cancel</button>
+        </div>
+      </form>
+
+      <form id="locationSearchForm" class="flex-row">
+        <label>
+          Query:
+          <input type="text" id="locationQuery" placeholder="Name contains..." />
+        </label>
+        <label>
+          Resort Only:
+          <select id="locationResort">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </label>
+        <button type="submit">Search</button>
+      </form>
+      <table id="locationsTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Display</th>
+            <th>Country</th>
+            <th>Region</th>
+            <th>Lat</th>
+            <th>Lon</th>
+            <th>TZ</th>
+            <th>Resort?</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="locationStatus" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    // Tab handling
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = document.getElementById(btn.dataset.tab);
+        if (panel) panel.classList.add('active');
+      });
+    });
+
+    // Config references
+    const table = document.getElementById('configTable');
+    const tbody = table.querySelector('tbody');
+    const statusEl = document.getElementById('status');
+    document.getElementById('loadBtn').addEventListener('click', loadConfig);
+
+    async function loadConfig() {
+      const token = document.getElementById('token').value.trim();
+      if (!token) {
+        return setStatus('Token is required');
+      }
+      setStatus('Loading...');
+      try {
+        const res = await fetch('/admin/config', { headers: { 'x-admin-token': token } });
+        if (!res.ok) {
+          throw new Error('Request failed: ' + res.status);
+        }
+        const data = await res.json();
+        renderTable(data, token);
+        setStatus('Loaded ' + data.length + ' entries');
+      } catch (err) {
+        setStatus(err.message);
+      }
+    }
+
+    function renderTable(entries, token) {
+      tbody.innerHTML = '';
+      entries.forEach((entry) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${entry.key}</td>
+          <td>${entry.description || ''}</td>
+          <td><input class="value-input" type="text" value="${entry.value}" /></td>
+          <td><button>Save</button></td>
+        `;
+        const input = tr.querySelector('input');
+        const button = tr.querySelector('button');
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            const res = await fetch('/admin/config/' + entry.key, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-admin-token': token,
+              },
+              body: JSON.stringify({ value: parseValue(input.value) }),
+            });
+            if (!res.ok) {
+              throw new Error('Update failed: ' + res.status);
+            }
+            setStatus('Saved ' + entry.key);
+          } catch (err) {
+            setStatus(err.message);
+          } finally {
+            button.disabled = false;
+          }
+        });
+        tbody.appendChild(tr);
+      });
+      table.style.display = 'table';
+    }
+
+    function parseValue(val) {
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+      const num = Number(val);
+      return Number.isNaN(num) ? val : num;
+    }
+
+    function setStatus(msg) {
+      statusEl.textContent = msg || '';
+    }
+
+    // Location references
+    const locationTable = document.getElementById('locationsTable');
+    const locationBody = locationTable.querySelector('tbody');
+    const locationStatus = document.getElementById('locationStatus');
+    const locationForm = document.getElementById('locationForm');
+    const saveLocationBtn = document.getElementById('saveLocationBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const editingIdInput = document.getElementById('editingId');
+
+    document.getElementById('locationSearchForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      loadLocations();
+    });
+    locationForm.addEventListener('submit', submitLocation);
+    cancelEditBtn.addEventListener('click', () => {
+      resetLocationForm();
+      setLocationStatus('Edit cancelled');
+    });
+
+    async function loadLocations() {
+      const query = document.getElementById('locationQuery').value.trim();
+      const resort = document.getElementById('locationResort').value;
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (resort) params.set('isSkiResort', resort);
+      setLocationStatus('Loading locations...');
+      try {
+        const res = await fetch('/locations?' + params.toString());
+        if (!res.ok) throw new Error('Failed to load locations');
+        const data = await res.json();
+        renderLocations(data);
+        setLocationStatus(`Loaded ${data.length} locations`);
+      } catch (err) {
+        setLocationStatus(err.message);
+      }
+    }
+
+    function renderLocations(locations) {
+      locationBody.innerHTML = '';
+      locations.forEach((loc) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${loc.name}</td>
+          <td>${loc.displayName || ''}</td>
+          <td>${loc.country || ''}</td>
+          <td>${loc.region || ''}</td>
+          <td>${loc.lat}</td>
+          <td>${loc.lon}</td>
+          <td>${loc.tz_iana || ''}</td>
+          <td>${loc.isSkiResort ? 'Yes' : 'No'}</td>
+          <td>
+            <button type="button" class="edit-btn">Edit</button>
+            <button type="button" class="delete-btn" data-id="${loc.id}">Delete</button>
+          </td>
+        `;
+        const deleteBtn = tr.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', () => deleteLocation(loc.id));
+        const editBtn = tr.querySelector('.edit-btn');
+        editBtn.addEventListener('click', () => startEditLocation(loc));
+        locationBody.appendChild(tr);
+      });
+      locationTable.style.display = locations.length ? 'table' : 'none';
+    }
+
+    async function deleteLocation(id) {
+      if (!id) return;
+      if (!confirm('Delete this location?')) return;
+      setLocationStatus('Deleting location...');
+      try {
+        const res = await fetch('/locations/' + id, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        setLocationStatus('Deleted location');
+        loadLocations();
+      } catch (err) {
+        setLocationStatus(err.message);
+      }
+    }
+
+    async function submitLocation(event) {
+      event.preventDefault();
+      const editingId = editingIdInput.value;
+      const payload = {
+        name: document.getElementById('newName').value.trim(),
+        country: document.getElementById('newCountry').value.trim(),
+        region: document.getElementById('newRegion').value.trim(),
+        lat: Number(document.getElementById('newLat').value),
+        lon: Number(document.getElementById('newLon').value),
+        tz_iana: document.getElementById('newTz').value.trim(),
+        isSkiResort: document.getElementById('newResort').value === 'true',
+      };
+      if (!payload.name || !payload.country || Number.isNaN(payload.lat) || Number.isNaN(payload.lon) || !payload.tz_iana) {
+        return setLocationStatus('All required fields must be filled');
+      }
+      setLocationStatus(editingId ? 'Saving location...' : 'Creating location...');
+      try {
+        const res = await fetch(editingId ? '/locations/' + editingId : '/locations', {
+          method: editingId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Save failed');
+        }
+        setLocationStatus(editingId ? 'Location updated' : 'Location created');
+        resetLocationForm();
+        loadLocations();
+      } catch (err) {
+        setLocationStatus(err.message);
+      }
+    }
+
+    function startEditLocation(location) {
+      document.getElementById('newName').value = location.name || '';
+      document.getElementById('newCountry').value = location.country || '';
+      document.getElementById('newRegion').value = location.region || '';
+      document.getElementById('newLat').value = location.lat ?? '';
+      document.getElementById('newLon').value = location.lon ?? '';
+      document.getElementById('newTz').value = location.tz_iana || '';
+      document.getElementById('newResort').value = location.isSkiResort ? 'true' : 'false';
+      editingIdInput.value = location.id;
+      saveLocationBtn.textContent = 'Save';
+      cancelEditBtn.style.display = 'inline-block';
+      setLocationStatus(`Editing ${location.displayName || location.name}`);
+    }
+
+    function resetLocationForm() {
+      locationForm.reset();
+      document.getElementById('newResort').value = 'false';
+      editingIdInput.value = '';
+      saveLocationBtn.textContent = 'Add';
+      cancelEditBtn.style.display = 'none';
+    }
+
+    function setLocationStatus(msg) {
+      locationStatus.textContent = msg || '';
+    }
+  </script>
+</body>
+</html>

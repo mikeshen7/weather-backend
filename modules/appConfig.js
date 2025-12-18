@@ -1,0 +1,169 @@
+'use strict';
+
+const appConfigDb = require('../models/appConfigDb');
+
+const defaults = {
+  MS_PER_DAY: 24 * 60 * 60 * 1000,
+  DEFAULT_DAYS_BACK: 3,
+  DEFAULT_DAYS_FORWARD: 14,
+  MAX_DAYS_BACK: 60,
+  MAX_DAYS_FORWARD: 14,
+  SEGMENT_MAX_DAYS_BACK: 7,
+  SEGMENT_MAX_DAYS_FORWARD: 14,
+  BACKFILL_DAYS: 14,
+  FETCH_INTERVAL_HOURS: 2,
+  CLEAN_INTERVAL_HOURS: 24,
+  BACKFILL_INTERVAL_HOURS: 24,
+  DAYS_TO_KEEP: 60,
+  MAX_DISTANCE_MI: 30,
+  CONFIG_REFRESH_INTERVAL_HOURS: 24,
+};
+
+const DEFAULT_CONFIG = {
+  DEFAULT_DAYS_BACK: {
+    value: defaults.DEFAULT_DAYS_BACK,
+    description: 'Default lookback (days) for hourly queries.'
+  },
+  DEFAULT_DAYS_FORWARD: {
+    value: defaults.DEFAULT_DAYS_FORWARD,
+    description: 'Default look-forward (days) for hourly queries.'
+  },
+  MAX_DAYS_BACK: {
+    value: defaults.MAX_DAYS_BACK,
+    description: 'Maximum historical days allowed for queries.'
+  },
+  MAX_DAYS_FORWARD: {
+    value: defaults.MAX_DAYS_FORWARD,
+    description: 'Maximum future days allowed from provider.'
+  },
+  SEGMENT_MAX_DAYS_BACK: {
+    value: defaults.SEGMENT_MAX_DAYS_BACK,
+    description: 'Max historical days for daily segments.'
+  },
+  SEGMENT_MAX_DAYS_FORWARD: {
+    value: defaults.SEGMENT_MAX_DAYS_FORWARD,
+    description: 'Max future days for daily segments.'
+  },
+  BACKFILL_DAYS: {
+    value: defaults.BACKFILL_DAYS,
+    description: 'Days of history to backfill on startup.'
+  },
+  FETCH_INTERVAL_HOURS: {
+    value: defaults.FETCH_INTERVAL_HOURS,
+    description: 'Interval for forecast fetch jobs (hours).'
+  },
+  CLEAN_INTERVAL_HOURS: {
+    value: defaults.CLEAN_INTERVAL_HOURS,
+    description: 'Interval for cleanup jobs (hours).'
+  },
+  BACKFILL_INTERVAL_HOURS: {
+    value: defaults.BACKFILL_INTERVAL_HOURS,
+    description: 'Interval between automatic backfills (hours).'
+  },
+  DAYS_TO_KEEP: {
+    value: defaults.DAYS_TO_KEEP,
+    description: 'Number of days of hourly data to retain.'
+  },
+  MAX_DISTANCE_MI: {
+    value: defaults.MAX_DISTANCE_MI,
+    description: 'Max distance (miles) when searching nearest location.'
+  },
+  CONFIG_REFRESH_INTERVAL_HOURS: {
+    value: defaults.CONFIG_REFRESH_INTERVAL_HOURS,
+    description: 'Interval between automatic config cache refreshes (hours).'
+  },
+};
+
+const cache = new Map();
+let values = buildValuesFromCache();
+
+async function ensureWeatherConfigDefaults() {
+  for (const [key, meta] of Object.entries(DEFAULT_CONFIG)) {
+    await appConfigDb.updateOne(
+      { key },
+      {
+        $set: {
+          value: meta.value,
+        },
+        $setOnInsert: {
+          key,
+          description: meta.description,
+        },
+      },
+      { upsert: true }
+    );
+  }
+  await refreshConfigCache();
+}
+
+async function refreshConfigCache() {
+  const docs = await appConfigDb.find({}).lean();
+  cache.clear();
+  docs.forEach((doc) => {
+    cache.set(doc.key, doc.value);
+  });
+  values = buildValuesFromCache();
+  console.log(JSON.stringify({
+    event: 'config_cache_refreshed',
+    entries: cache.size,
+  }));
+  return getConfigMap();
+}
+
+function getConfigMap() {
+  const map = {};
+  for (const [key, value] of cache.entries()) {
+    map[key] = value;
+  }
+  return map;
+}
+
+async function setConfigValue(key, value) {
+  const meta = DEFAULT_CONFIG[key];
+  await appConfigDb.updateOne(
+    { key },
+    {
+      $set: {
+        key,
+        value,
+        description: meta?.description || '',
+      },
+    },
+    { upsert: true }
+  );
+  cache.set(key, value);
+  values = buildValuesFromCache();
+  return { key, value };
+}
+
+function buildValuesFromCache() {
+  return {
+    MS_PER_DAY: defaults.MS_PER_DAY,
+    DEFAULT_DAYS_BACK: readValue('DEFAULT_DAYS_BACK', defaults.DEFAULT_DAYS_BACK),
+    DEFAULT_DAYS_FORWARD: readValue('DEFAULT_DAYS_FORWARD', defaults.DEFAULT_DAYS_FORWARD),
+    MAX_DAYS_BACK: readValue('MAX_DAYS_BACK', defaults.MAX_DAYS_BACK),
+    MAX_DAYS_FORWARD: readValue('MAX_DAYS_FORWARD', defaults.MAX_DAYS_FORWARD),
+    SEGMENT_MAX_DAYS_BACK: readValue('SEGMENT_MAX_DAYS_BACK', defaults.SEGMENT_MAX_DAYS_BACK),
+    SEGMENT_MAX_DAYS_FORWARD: readValue('SEGMENT_MAX_DAYS_FORWARD', defaults.SEGMENT_MAX_DAYS_FORWARD),
+    BACKFILL_DAYS: readValue('BACKFILL_DAYS', defaults.BACKFILL_DAYS),
+    FETCH_INTERVAL_HOURS: readValue('FETCH_INTERVAL_HOURS', defaults.FETCH_INTERVAL_HOURS),
+    CLEAN_INTERVAL_HOURS: readValue('CLEAN_INTERVAL_HOURS', defaults.CLEAN_INTERVAL_HOURS),
+    BACKFILL_INTERVAL_HOURS: readValue('BACKFILL_INTERVAL_HOURS', defaults.BACKFILL_INTERVAL_HOURS),
+    DAYS_TO_KEEP: readValue('DAYS_TO_KEEP', defaults.DAYS_TO_KEEP),
+    MAX_DISTANCE_MI: readValue('MAX_DISTANCE_MI', defaults.MAX_DISTANCE_MI),
+    CONFIG_REFRESH_INTERVAL_HOURS: readValue('CONFIG_REFRESH_INTERVAL_HOURS', defaults.CONFIG_REFRESH_INTERVAL_HOURS),
+  };
+}
+
+function readValue(key, fallback) {
+  return cache.has(key) ? cache.get(key) : fallback;
+}
+
+module.exports = {
+  ensureWeatherConfigDefaults,
+  refreshConfigCache,
+  getConfigMap,
+  setConfigValue,
+  DEFAULT_CONFIG,
+  values: () => values,
+};

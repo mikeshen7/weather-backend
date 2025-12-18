@@ -3,14 +3,7 @@
 const hourlyWeatherDb = require('../models/hourlyWeatherDb');
 const locationsDb = require('../models/locationsDb');
 const { clampDays } = require('./weatherAggregations');
-const {
-  MAX_DAYS_BACK,
-  MAX_DAYS_FORWARD,
-  DEFAULT_DAYS_BACK,
-  DEFAULT_DAYS_FORWARD,
-  MS_PER_DAY,
-  DEFAULT_MAX_DISTANCE_KM,
-} = require('./weatherConfig');
+const appConfig = require('./appConfig');
 
 // sanitizeDoc converts a Mongo doc into the API-safe payload shape.
 function sanitizeDoc(doc) {
@@ -86,8 +79,8 @@ async function queryHourlyDocs(options) {
     daysBack,
     daysForward,
     sort = 'asc',
-    maxDaysBack = MAX_DAYS_BACK,
-    maxDaysForward = MAX_DAYS_FORWARD,
+    maxDaysBack,
+    maxDaysForward,
   } = options;
   if (!locationId) {
     const error = new Error('locationId is required');
@@ -95,11 +88,19 @@ async function queryHourlyDocs(options) {
     throw error;
   }
 
+  const config = appConfig.values();
+  const {
+    DEFAULT_DAYS_BACK,
+    DEFAULT_DAYS_FORWARD,
+    MS_PER_DAY,
+    MAX_DAYS_BACK,
+    MAX_DAYS_FORWARD,
+  } = config;
   const filter = { locationId };
 
   const now = Date.now();
-  const backDays = clampDays(daysBack, DEFAULT_DAYS_BACK, maxDaysBack);
-  const forwardDays = clampDays(daysForward, DEFAULT_DAYS_FORWARD, maxDaysForward);
+  const backDays = clampDays(daysBack, DEFAULT_DAYS_BACK, maxDaysBack ?? MAX_DAYS_BACK);
+  const forwardDays = clampDays(daysForward, DEFAULT_DAYS_FORWARD, maxDaysForward ?? MAX_DAYS_FORWARD);
   const startAnchor = new Date(now - backDays * MS_PER_DAY);
   startAnchor.setUTCHours(0, 0, 0, 0);
   const endAnchor = new Date(now + forwardDays * MS_PER_DAY);
@@ -149,7 +150,8 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 // findNearestLocation returns the closest stored location within bounds.
-async function findNearestLocation(lat, lon, maxDistanceKm = DEFAULT_MAX_DISTANCE_KM) {
+async function findNearestLocation(lat, lon, maxDistanceMi = appConfig.values().MAX_DISTANCE_MI) {
+  const maxDistanceKm = maxDistanceMi * 1.60934;
   const deltaLat = maxDistanceKm / 111;
   const deltaLon = deltaLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);
 
@@ -177,11 +179,6 @@ async function findNearestLocation(lat, lon, maxDistanceKm = DEFAULT_MAX_DISTANC
 }
 
 module.exports = {
-  MAX_DAYS_BACK,
-  MAX_DAYS_FORWARD,
-  DEFAULT_DAYS_BACK,
-  DEFAULT_DAYS_FORWARD,
-  MS_PER_DAY,
   sanitizeDoc,
   buildDateFilter,
   fetchLocationDetail,

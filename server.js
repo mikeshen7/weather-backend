@@ -5,11 +5,13 @@ const express = require('express');              // *** Backend server
 const cors = require('cors');                    // *** Middleware 
 const mongoose = require('mongoose');            // *** Database
 const weatherApi = require('./modules/weatherApi');
-const weatherMaintenance = require('./modules/weatherMaintenance');
+const appMaintenance = require('./modules/appMaintenance');
 const locations = require('./modules/locations');
 const weatherHourly = require('./modules/weatherHourly');
 const weatherDaily = require('./modules/weatherDaily');
-
+const appConfig = require('./modules/appConfig');
+const adminConfig = require('./modules/adminConfig');
+const { requireAdminToken } = require('./modules/auth');
 
 // *** Database connection and test
 const databaseName = process.env.DB_NAME || 'weather';
@@ -26,6 +28,7 @@ mongoose.set('strictQuery', false);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`server listening on ${PORT}`));
 
@@ -34,6 +37,7 @@ app.post('/locations', (request, response, next) => locations.endpointCreateLoca
 app.get('/locations', (request, response, next) => locations.endpointSearchLocations(request, response, next));
 app.get('/locations/nearest', (request, response, next) => locations.endpointNearestLocation(request, response, next));
 app.delete('/locations/:id', (request, response, next) => locations.endpointDeleteLocation(request, response, next));
+app.put('/locations/:id', (request, response, next) => locations.endpointUpdateLocation(request, response, next));
 
 // *** Weather Endpoints
 app.get('/weather/hourly', (request, response, next) => weatherHourly.endpointHourlyWeather(request, response, next));
@@ -43,19 +47,26 @@ app.get('/weather/daily/overview/by-coords', (request, response, next) => weathe
 app.get('/weather/daily/segments', (request, response, next) => weatherDaily.endpointDailySegments(request, response, next));
 app.get('/weather/daily/segments/by-coords', (request, response, next) => weatherDaily.endpointDailySegmentsByCoords(request, response, next));
 
+// *** Admin Config Endpoints
+app.get('/admin/config', requireAdminToken, (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
+app.put('/admin/config/:key', requireAdminToken, (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
 
 // *** Misc ENDPOINTS
 app.get('/', (request, response) => response.status(200).send('Welcome'));
 app.get('/health', (request, response) => response.status(200).send('Health OK'));
 
 app.get('*', (request, response) => response.status(404).send('Not available'));
-app.use((error, request, response, next) => response.status(500).send(error.message));
+app.use((error, request, response, next) => {
+  console.error('*** express error:', error.message);
+  return response.status(500).send(error.message);
+});
 
 // *** Main
 async function start() {
+  await appConfig.ensureWeatherConfigDefaults();
   await locations.startLocationMaintenance();
   setTimeout(() => {
-    weatherMaintenance.startMaintenance();
+    appMaintenance.startMaintenance();
   }, 1000);
 }
 

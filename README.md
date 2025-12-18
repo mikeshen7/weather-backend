@@ -44,6 +44,9 @@ npm install
   - `GET /weather/daily/segments?locationId=<mongoId>&daysForward=10` groups each day into four dayparts (overnight/morning/afternoon/evening) with min/max temps, precip/snow totals, averages, and representative hours
   - `GET /weather/daily/segments/by-coords?lat=39.6&lon=-106.4&daysForward=10` returns the same daypart data after resolving a location from coordinates
   - `startSchedule` fetches hourly weather for all locations; endpoints query Mongo-backed data.
+- Admin:
+  - `GET /admin/config` lists config entries, `PUT /admin/config/:key` updates a value (requires `x-admin-token`)
+  - Minimal UI served at `/admin.html` to view/edit config values (radius now uses miles)
 
 - Health:
   - `GET /health`

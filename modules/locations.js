@@ -1,7 +1,10 @@
 'use strict';
 
 const locationsDb = require('../models/locationsDb');
-const cache = require('./cache');
+
+const locationCache = {
+  locations: [],
+};
 
 function buildDisplayName(doc) {
   const parts = [doc.name];
@@ -49,9 +52,13 @@ async function endpointCreateLocation(request, response, next) {
       isSkiResort: parseBoolean(isSkiResort) ?? false,
     });
 
-    await cache.refreshLocationsCache();
+    await refreshLocationsCache();
 
-    console.log(`Location created: ${doc.name}`);
+    console.log(JSON.stringify({
+      event: 'location_created',
+      locationId: String(doc._id),
+      name: doc.name,
+    }));
 
     return response.status(201).send({
       id: doc._id,
@@ -70,7 +77,7 @@ async function endpointCreateLocation(request, response, next) {
     if (error.code === 11000) {
       return response.status(409).send('Location already exists (name/country/region or lat/lon conflict)');
     }
-    console.log(error.message, 'locations.js endpointCreateLocation');
+    console.error('*** locations endpointCreateLocation error:', error.message);
     next(error);
   }
 }
@@ -105,7 +112,7 @@ async function endpointSearchLocations(request, response, next) {
 
     return response.status(200).send(results);
   } catch (error) {
-    console.log(error.message, 'locations.js endpointSearchLocations');
+    console.error('*** locations endpointSearchLocations error:', error.message);
     next(error);
   }
 }
@@ -155,7 +162,7 @@ async function endpointNearestLocation(request, response, next) {
       distanceKm: nearestDistance,
     });
   } catch (error) {
-    console.log(error.message, 'locations.js endpointNearestLocation');
+    console.error('*** locations endpointNearestLocation error:', error.message);
     next(error);
   }
 }
@@ -172,15 +179,92 @@ async function endpointDeleteLocation(request, response, next) {
       return response.status(404).send('Location not found');
     }
 
-    await cache.refreshLocationsCache();
+    await refreshLocationsCache();
 
-    console.log(`Location deleted: ${deleted.name}`);
+    console.log(JSON.stringify({
+      event: 'location_deleted',
+      locationId: String(deleted._id),
+      name: deleted.name,
+    }));
 
     return response.status(200).send('Location deleted');
   } catch (error) {
-    console.log(error.message, 'locations.js endpointDeleteLocation');
+    console.error('*** locations endpointDeleteLocation error:', error.message);
     next(error);
   }
+}
+
+async function endpointUpdateLocation(request, response, next) {
+  try {
+    const { id } = request.params;
+    if (!id) {
+      return response.status(400).send('Location id is required');
+    }
+
+    const { name, country, region = '', lat, lon, tz_iana, isSkiResort } = request.body || {};
+    if (!name || !country || lat === undefined || lon === undefined || !tz_iana) {
+      return response.status(400).send('name, country, lat, lon, and tz_iana are required');
+    }
+
+    const updated = await locationsDb.findByIdAndUpdate(
+      id,
+      {
+        name: String(name).trim(),
+        country: String(country).trim(),
+        region: String(region).trim(),
+        lat: Number(lat),
+        lon: Number(lon),
+        tz_iana: String(tz_iana).trim(),
+        isSkiResort: parseBoolean(isSkiResort) ?? false,
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return response.status(404).send('Location not found');
+    }
+
+    await refreshLocationsCache();
+
+    console.log(JSON.stringify({
+      event: 'location_updated',
+      locationId: String(updated._id),
+      name: updated.name,
+    }));
+
+    return response.status(200).send({
+      id: updated._id,
+      name: updated.name,
+      displayName: buildDisplayName(updated),
+      country: updated.country,
+      region: updated.region,
+      lat: updated.lat,
+      lon: updated.lon,
+      tz_iana: updated.tz_iana,
+      isSkiResort: updated.isSkiResort,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return response.status(409).send('Location already exists (name/country/region or lat/lon conflict)');
+    }
+    console.error('*** locations endpointUpdateLocation error:', error.message);
+    next(error);
+  }
+}
+
+async function refreshLocationsCache() {
+  locationCache.locations = await locationsDb.find({});
+  console.log(JSON.stringify({
+    event: 'locations_cache_refreshed',
+    count: locationCache.locations.length,
+  }));
+  return locationCache.locations;
+}
+
+function getCachedLocations() {
+  return locationCache.locations;
 }
 
 module.exports = {
@@ -188,9 +272,11 @@ module.exports = {
   endpointNearestLocation,
   endpointCreateLocation,
   endpointDeleteLocation,
+  endpointUpdateLocation,
   startLocationMaintenance: async function startLocationMaintenance() {
-    await cache.refreshLocationsCache();
-    // refresh every 2 hours
-    setInterval(cache.refreshLocationsCache, 7200000);
+    await refreshLocationsCache();
+    setInterval(refreshLocationsCache, 24 * 60 * 60 * 1000);
   },
+  refreshLocationsCache,
+  getCachedLocations,
 };

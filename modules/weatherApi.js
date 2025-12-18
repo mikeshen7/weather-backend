@@ -84,53 +84,24 @@ function buildForecastUrl(location, options = {}) {
 
 // fetchLocation retrieves weather for a location with retries/timeouts and upserts it.
 async function fetchLocation(location, options = {}) {
-  console.log(`Fetching Weather API data for: ${location.name} on ${Date()}`);
-
   const { context = 'forecast', ...queryOptions } = options;
   const { name } = location;
   const url = buildForecastUrl(location, queryOptions);
 
   const maxAttempts = 3;
   const baseDelayMs = 2000;
-  const startTime = Date.now();
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await axios.get(url, { timeout: 10000 });
       const { data } = response;
       await upsertWeatherDocs(location, name, data);
-      console.log(JSON.stringify({
-        event: 'weather_fetch_success',
-        locationId: String(location._id),
-        name,
-        context,
-        durationMs: Date.now() - startTime,
-        attempts: attempt,
-        query: queryOptions,
-      }));
       return;
     } catch (error) {
       lastError = error;
       const isLastAttempt = attempt === maxAttempts;
       const waitMs = baseDelayMs * attempt;
-      console.log(JSON.stringify({
-        event: 'weather_fetch_retry',
-        locationId: String(location._id),
-        name,
-        context,
-        attempt,
-        error: error.message,
-      }));
       if (isLastAttempt) {
-        console.log(JSON.stringify({
-          event: 'weather_fetch_failed',
-          locationId: String(location._id),
-          name,
-          context,
-          attempts: attempt,
-          durationMs: Date.now() - startTime,
-          error: error.message,
-        }));
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, waitMs));

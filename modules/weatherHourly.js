@@ -19,7 +19,7 @@ async function endpointHourlyWeather(request, response, next) {
 
     return response.status(200).send(payload);
   } catch (error) {
-    console.log(error.message, 'weatherHourly endpointHourlyWeather');
+    console.error('*** weatherHourly endpointHourlyWeather error:', error.message);
     next(error);
   }
 }
@@ -52,7 +52,7 @@ async function endpointHourlyWeatherByCoords(request, response, next) {
 
     return response.status(200).send(payload);
   } catch (error) {
-    console.log(error.message, 'weatherHourly endpointHourlyWeatherByCoords');
+    console.error('*** weatherHourly endpointHourlyWeatherByCoords error:', error.message);
     next(error);
   }
 }

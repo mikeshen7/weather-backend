@@ -2,10 +2,7 @@
 
 const { queryHourlyDocs, findNearestLocation } = require('./weatherShared');
 const { aggregateDailyOverview, aggregateDailySegments } = require('./weatherAggregations');
-const {
-  SEGMENT_MAX_DAYS_BACK,
-  SEGMENT_MAX_DAYS_FORWARD,
-} = require('./weatherConfig');
+const appConfig = require('./appConfig');
 
 // endpointDailyOverview returns per-day aggregates for a locationId.
 async function endpointDailyOverview(request, response, next) {
@@ -20,14 +17,14 @@ async function endpointDailyOverview(request, response, next) {
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
-      maxDaysBack: SEGMENT_MAX_DAYS_BACK,
-      maxDaysForward: SEGMENT_MAX_DAYS_FORWARD,
+      maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
+      maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
     });
 
     const days = aggregateDailyOverview(docs, location?.tz_iana);
     return response.status(200).send({ location, days });
   } catch (error) {
-    console.log(error.message, 'weatherDaily endpointDailyOverview');
+    console.error('*** weatherDaily endpointDailyOverview error:', error.message);
     next(error);
   }
 }
@@ -52,8 +49,8 @@ async function endpointDailyOverviewByCoords(request, response, next) {
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
-      maxDaysBack: SEGMENT_MAX_DAYS_BACK,
-      maxDaysForward: SEGMENT_MAX_DAYS_FORWARD,
+      maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
+      maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
     });
 
     const days = aggregateDailyOverview(docs, location?.tz_iana);
@@ -63,7 +60,7 @@ async function endpointDailyOverviewByCoords(request, response, next) {
 
     return response.status(200).send({ location, days });
   } catch (error) {
-    console.log(error.message, 'weatherDaily endpointDailyOverviewByCoords');
+    console.error('*** weatherDaily endpointDailyOverviewByCoords error:', error.message);
     next(error);
   }
 }
@@ -86,7 +83,7 @@ async function endpointDailySegments(request, response, next) {
     const days = aggregateDailySegments(docs, location?.tz_iana);
     return response.status(200).send({ location, days });
   } catch (error) {
-    console.log(error.message, 'weatherDaily endpointDailySegments');
+    console.error('*** weatherDaily endpointDailySegments error:', error.message);
     next(error);
   }
 }
@@ -120,7 +117,7 @@ async function endpointDailySegmentsByCoords(request, response, next) {
 
     return response.status(200).send({ location, days });
   } catch (error) {
-    console.log(error.message, 'weatherDaily endpointDailySegmentsByCoords');
+    console.error('*** weatherDaily endpointDailySegmentsByCoords error:', error.message);
     next(error);
   }
 }
