@@ -1,0 +1,133 @@
+'use strict';
+
+const { queryHourlyDocs, findNearestLocation } = require('./weatherShared');
+const { aggregateDailyOverview, aggregateDailySegments } = require('./weatherAggregations');
+const {
+  SEGMENT_MAX_DAYS_BACK,
+  SEGMENT_MAX_DAYS_FORWARD,
+} = require('./weatherConfig');
+
+// endpointDailyOverview returns per-day aggregates for a locationId.
+async function endpointDailyOverview(request, response, next) {
+  try {
+    const { locationId } = request.query;
+    if (!locationId) {
+      return response.status(400).send('locationId query param is required');
+    }
+
+    const { docs, location } = await queryHourlyDocs({
+      locationId,
+      daysBack: request.query.daysBack,
+      daysForward: request.query.daysForward,
+      sort: request.query.sort,
+      maxDaysBack: SEGMENT_MAX_DAYS_BACK,
+      maxDaysForward: SEGMENT_MAX_DAYS_FORWARD,
+    });
+
+    const days = aggregateDailyOverview(docs, location?.tz_iana);
+    return response.status(200).send({ location, days });
+  } catch (error) {
+    console.log(error.message, 'weatherDaily endpointDailyOverview');
+    next(error);
+  }
+}
+
+// endpointDailyOverviewByCoords resolves coordinates then returns daily overview.
+async function endpointDailyOverviewByCoords(request, response, next) {
+  try {
+    const lat = parseFloat(request.query.lat);
+    const lon = parseFloat(request.query.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      return response.status(400).send('lat and lon query params are required and must be numeric');
+    }
+
+    const maxDistanceKm = parseFloat(request.query.maxDistanceKm) || 50;
+    const nearest = await findNearestLocation(lat, lon, maxDistanceKm);
+    if (!nearest) {
+      return response.status(404).send('No nearby location found for supplied lat/lon');
+    }
+
+    const { docs, location } = await queryHourlyDocs({
+      locationId: String(nearest.doc._id),
+      daysBack: request.query.daysBack,
+      daysForward: request.query.daysForward,
+      sort: request.query.sort,
+      maxDaysBack: SEGMENT_MAX_DAYS_BACK,
+      maxDaysForward: SEGMENT_MAX_DAYS_FORWARD,
+    });
+
+    const days = aggregateDailyOverview(docs, location?.tz_iana);
+    if (location) {
+      location.distanceKm = nearest.distanceKm;
+    }
+
+    return response.status(200).send({ location, days });
+  } catch (error) {
+    console.log(error.message, 'weatherDaily endpointDailyOverviewByCoords');
+    next(error);
+  }
+}
+
+// endpointDailySegments returns four daypart summaries for a locationId.
+async function endpointDailySegments(request, response, next) {
+  try {
+    const { locationId } = request.query;
+    if (!locationId) {
+      return response.status(400).send('locationId query param is required');
+    }
+
+    const { docs, location } = await queryHourlyDocs({
+      locationId,
+      daysBack: request.query.daysBack,
+      daysForward: request.query.daysForward,
+      sort: request.query.sort,
+    });
+
+    const days = aggregateDailySegments(docs, location?.tz_iana);
+    return response.status(200).send({ location, days });
+  } catch (error) {
+    console.log(error.message, 'weatherDaily endpointDailySegments');
+    next(error);
+  }
+}
+
+// endpointDailySegmentsByCoords resolves coords then returns daypart summaries.
+async function endpointDailySegmentsByCoords(request, response, next) {
+  try {
+    const lat = parseFloat(request.query.lat);
+    const lon = parseFloat(request.query.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      return response.status(400).send('lat and lon query params are required and must be numeric');
+    }
+
+    const maxDistanceKm = parseFloat(request.query.maxDistanceKm) || 50;
+    const nearest = await findNearestLocation(lat, lon, maxDistanceKm);
+    if (!nearest) {
+      return response.status(404).send('No nearby location found for supplied lat/lon');
+    }
+
+    const { docs, location } = await queryHourlyDocs({
+      locationId: String(nearest.doc._id),
+      daysBack: request.query.daysBack,
+      daysForward: request.query.daysForward,
+      sort: request.query.sort,
+    });
+
+    const days = aggregateDailySegments(docs, location?.tz_iana);
+    if (location) {
+      location.distanceKm = nearest.distanceKm;
+    }
+
+    return response.status(200).send({ location, days });
+  } catch (error) {
+    console.log(error.message, 'weatherDaily endpointDailySegmentsByCoords');
+    next(error);
+  }
+}
+
+module.exports = {
+  endpointDailyOverview,
+  endpointDailyOverviewByCoords,
+  endpointDailySegments,
+  endpointDailySegmentsByCoords,
+};

@@ -1,9 +1,8 @@
 'use strict';
 
 const axios = require('axios');
-const cache = require('./cache');
+const { URLSearchParams } = require('url');
 const hourlyWeatherDb = require('../models/hourlyWeatherDb');
-
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 const HOURLY_FIELDS = [
   'temperature_2m',
@@ -18,7 +17,7 @@ const HOURLY_FIELDS = [
 ].join(',');
 
 // ******************* Constants *******************
-// Simple weathercode → condition/icon mapping (extend as needed)
+// mapWeatherCode converts Open-Meteo codes to local condition/icon representations.
 function mapWeatherCode(code) {
   const table = {
     0: { conditions: 'Clear', icon: 'clear-day' },
@@ -58,12 +57,92 @@ const mmToIn = (mm) => mm == null ? null : mm / 25.4;
 const cmToIn = (cm) => cm == null ? null : cm / 2.54;
 
 // ******************* Weather API fetch *******************
-async function fetchLocation(location) {
+// buildForecastUrl constructs the Open-Meteo request for a location and window.
+function buildForecastUrl(location, options = {}) {
+  const params = new URLSearchParams({
+    latitude: location.lat,
+    longitude: location.lon,
+    hourly: HOURLY_FIELDS,
+    timezone: 'auto',
+  });
+
+  if (options.startDate) {
+    params.set('start_date', options.startDate);
+  }
+  if (options.endDate) {
+    params.set('end_date', options.endDate);
+  }
+  if (options.pastDays) {
+    params.set('past_days', options.pastDays);
+  }
+  if (options.forecastDays) {
+    params.set('forecast_days', options.forecastDays);
+  }
+
+  return `${BASE_URL}?${params.toString()}`;
+}
+
+// fetchLocation retrieves weather for a location with retries/timeouts and upserts it.
+async function fetchLocation(location, options = {}) {
   console.log(`Fetching Weather API data for: ${location.name} on ${Date()}`);
 
-  const { lat, lon, name } = location;
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${HOURLY_FIELDS}&timezone=auto`;
-  const { data } = await axios.get(url);
+  const { context = 'forecast', ...queryOptions } = options;
+  const { name } = location;
+  const url = buildForecastUrl(location, queryOptions);
+
+  const maxAttempts = 3;
+  const baseDelayMs = 2000;
+  const startTime = Date.now();
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await axios.get(url, { timeout: 10000 });
+      const { data } = response;
+      await upsertWeatherDocs(location, name, data);
+      console.log(JSON.stringify({
+        event: 'weather_fetch_success',
+        locationId: String(location._id),
+        name,
+        context,
+        durationMs: Date.now() - startTime,
+        attempts: attempt,
+        query: queryOptions,
+      }));
+      return;
+    } catch (error) {
+      lastError = error;
+      const isLastAttempt = attempt === maxAttempts;
+      const waitMs = baseDelayMs * attempt;
+      console.log(JSON.stringify({
+        event: 'weather_fetch_retry',
+        locationId: String(location._id),
+        name,
+        context,
+        attempt,
+        error: error.message,
+      }));
+      if (isLastAttempt) {
+        console.log(JSON.stringify({
+          event: 'weather_fetch_failed',
+          locationId: String(location._id),
+          name,
+          context,
+          attempts: attempt,
+          durationMs: Date.now() - startTime,
+          error: error.message,
+        }));
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
+}
+
+// upsertWeatherDocs transforms the API payload into Mongo upsert operations.
+async function upsertWeatherDocs(location, name, data) {
 
   const times = data.hourly.time;
   const temps = data.hourly.temperature_2m;
@@ -117,66 +196,4 @@ async function fetchLocation(location) {
   }
 }
 
-async function fetchAllLocations() {
-  // ensure cache is populated
-  if (!cache['locations'] || cache['locations'].length === 0) {
-    await cache.refreshLocationsCache();
-  }
-  const locations = cache['locations'] || [];
-  for (const location of locations) {
-    try {
-      await fetchLocation(location);
-    } catch (err) {
-      console.log(`Open-Meteo fetch failed for ${location.name}:`, err.message);
-    }
-  }
-  // refresh cache of hourly weather if you keep one
-  cache['hourlyWeather'] = await hourlyWeatherDb.find({});
-}
-
-// ******************* DB Maintenance *******************
-async function removeOrphanHourlyWeather() {
-  try {
-    // ensure locations cache is current
-    if (!cache['locations'] || cache['locations'].length === 0) {
-      await cache.refreshLocationsCache();
-    }
-    const locationIds = (cache['locations'] || []).map((r) => String(r._id));
-    if (locationIds.length === 0) return;
-
-    // only delete if the record is tied to a locationId
-    const result = await hourlyWeatherDb.deleteMany({
-      locationId: { $exists: true, $nin: locationIds },
-    });
-    console.log(`Removed ${result.deletedCount || 0} orphan hourly weather docs`);
-  } catch (err) {
-    console.log('removeOrphanHourlyWeather error:', err.message);
-  }
-}
-
-async function removeOldHourlyWeather() {
-  try {
-    const daysToKeep = 60
-    const cutoff = Date.now() - daysToKeep * 24 * 60 * 60 * 1000; // 7 days in ms
-    const result = await hourlyWeatherDb.deleteMany({ dateTimeEpoch: { $lt: cutoff } });
-    console.log(`Removed ${result.deletedCount || 0} old hourly weather docs`);
-  } catch (err) {
-    console.log('removeOldHourlyWeather error:', err.message);
-  }
-}
-
-// ******************* Scheduler *******************
-function weatherApiScheduler() {
-  // initial run
-  removeOrphanHourlyWeather()
-  removeOldHourlyWeather()
-  fetchAllLocations();
-
-  // every 2 hours (7200000 ms)
-  const interval = 7200000
-  setInterval(removeOrphanHourlyWeather, interval);
-  setInterval(removeOldHourlyWeather, interval);
-  setInterval(fetchAllLocations, interval);
-}
-
-module.exports = { weatherApiScheduler, fetchAllLocations, fetchLocation };
+module.exports = { fetchLocation };

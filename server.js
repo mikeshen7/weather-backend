@@ -5,7 +5,10 @@ const express = require('express');              // *** Backend server
 const cors = require('cors');                    // *** Middleware 
 const mongoose = require('mongoose');            // *** Database
 const weatherApi = require('./modules/weatherApi');
+const weatherMaintenance = require('./modules/weatherMaintenance');
 const locations = require('./modules/locations');
+const weatherHourly = require('./modules/weatherHourly');
+const weatherDaily = require('./modules/weatherDaily');
 
 
 // *** Database connection and test
@@ -33,8 +36,12 @@ app.get('/locations/nearest', (request, response, next) => locations.endpointNea
 app.delete('/locations/:id', (request, response, next) => locations.endpointDeleteLocation(request, response, next));
 
 // *** Weather Endpoints
-// app.get('/hourlyWeather/:resortName', (request, response, next) => hourlyWeather.endPointReadHourlyWeather(request, response, next));
-// app.get('/dailyWeather/:resortName', (request, response, next) => dailyWeather.endPointReadDailyWeather(request, response, next));
+app.get('/weather/hourly', (request, response, next) => weatherHourly.endpointHourlyWeather(request, response, next));
+app.get('/weather/hourly/by-coords', (request, response, next) => weatherHourly.endpointHourlyWeatherByCoords(request, response, next));
+app.get('/weather/daily/overview', (request, response, next) => weatherDaily.endpointDailyOverview(request, response, next));
+app.get('/weather/daily/overview/by-coords', (request, response, next) => weatherDaily.endpointDailyOverviewByCoords(request, response, next));
+app.get('/weather/daily/segments', (request, response, next) => weatherDaily.endpointDailySegments(request, response, next));
+app.get('/weather/daily/segments/by-coords', (request, response, next) => weatherDaily.endpointDailySegmentsByCoords(request, response, next));
 
 
 // *** Misc ENDPOINTS
@@ -47,9 +54,8 @@ app.use((error, request, response, next) => response.status(500).send(error.mess
 // *** Main
 async function start() {
   await locations.startLocationMaintenance();
-
-  setTimeout(async () => {
-    await weatherApi.weatherApiScheduler();
+  setTimeout(() => {
+    weatherMaintenance.startMaintenance();
   }, 1000);
 }
 

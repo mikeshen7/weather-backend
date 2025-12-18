@@ -37,7 +37,13 @@ npm install
  
 
 - Weather (from Open-Meteo, stored hourly):
-  - `startSchedule` fetches hourly weather for all locations; expose your own read endpoints as needed.
+  - `GET /weather/hourly?locationId=<mongoId>&daysBack=3&daysForward=14&sort=asc` (requires `locationId`, optional `daysBack`, `daysForward`, `sort`; defaults to 3 days back / 14 days forward)
+  - `GET /weather/hourly/by-coords?lat=39.6&lon=-106.4&daysBack=3` resolves the nearest stored location in one call (optional `maxDistanceKm`, `daysForward`)
+  - `GET /weather/daily/overview?locationId=<mongoId>&daysForward=10` aggregates hourly data (in the location’s timezone) into per-day entries exposing: min/max temps, precip/snow totals, avg windspeed/precip prob/cloud cover/visibility, and a representative hour near local noon (defaults 3 days back / 14 days forward)
+  - `GET /weather/daily/overview/by-coords?lat=39.6&lon=-106.4&daysForward=10` provides the same aggregation but resolves the nearest stored location by coordinates (optional `maxDistanceKm`)
+  - `GET /weather/daily/segments?locationId=<mongoId>&daysForward=10` groups each day into four dayparts (overnight/morning/afternoon/evening) with min/max temps, precip/snow totals, averages, and representative hours
+  - `GET /weather/daily/segments/by-coords?lat=39.6&lon=-106.4&daysForward=10` returns the same daypart data after resolving a location from coordinates
+  - `startSchedule` fetches hourly weather for all locations; endpoints query Mongo-backed data.
 
 - Health:
   - `GET /health`
@@ -46,6 +52,7 @@ npm install
 
 - Locations: cache refresh runs on startup and every 2 hours.
 - Weather: Open-Meteo fetch runs on startup (or delayed) and every 2 hours. Old hourly data (>60 days) and orphaned hourly records (for deleted locations) are cleaned.
+- Backfill: A 14-day historical backfill runs on startup and once per day to keep recent history populated.
 
 ## Data & Timezones
 
@@ -56,3 +63,7 @@ npm install
 
 Seed locations with:
 `node models/seedLocations.js`
+
+## Deployment
+
+Deployed on Render

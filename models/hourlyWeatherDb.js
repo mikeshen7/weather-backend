@@ -36,6 +36,7 @@ const hourlyWeatherSchema = new Schema(
 );
 
 // Create Collection
+hourlyWeatherSchema.index({ locationId: 1, dateTimeEpoch: 1 });
 const weatherDbCollection = mongoose.model(collectionName, hourlyWeatherSchema);
 
 module.exports = weatherDbCollection;
