@@ -33,11 +33,12 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`server listening on ${PORT}`));
 
 // *** Location Endpoints
-app.post('/locations', (request, response, next) => locations.endpointCreateLocation(request, response, next));
+app.post('/locations', requireAdminToken, (request, response, next) => locations.endpointCreateLocation(request, response, next));
 app.get('/locations', (request, response, next) => locations.endpointSearchLocations(request, response, next));
 app.get('/locations/nearest', (request, response, next) => locations.endpointNearestLocation(request, response, next));
-app.delete('/locations/:id', (request, response, next) => locations.endpointDeleteLocation(request, response, next));
-app.put('/locations/:id', (request, response, next) => locations.endpointUpdateLocation(request, response, next));
+app.get('/locations/lookup', (request, response, next) => locations.endpointLookupLocationMetadata(request, response, next));
+app.delete('/locations/:id', requireAdminToken, (request, response, next) => locations.endpointDeleteLocation(request, response, next));
+app.put('/locations/:id', requireAdminToken, (request, response, next) => locations.endpointUpdateLocation(request, response, next));
 
 // *** Weather Endpoints
 app.get('/weather/hourly', (request, response, next) => weatherHourly.endpointHourlyWeather(request, response, next));

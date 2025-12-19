@@ -3,6 +3,10 @@
 const axios = require('axios');
 const { URLSearchParams } = require('url');
 const hourlyWeatherDb = require('../models/hourlyWeatherDb');
+const {
+  localDateTimeStringToUtcEpoch,
+  getLocalPartsFromUtc,
+} = require('./timezone');
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 const HOURLY_FIELDS = [
   'temperature_2m',
@@ -52,9 +56,9 @@ function mapWeatherCode(code) {
   return table[code] || { conditions: 'Unknown', icon: 'cloudy' };
 }
 
-const toF = (c) => c == null ? null : (c * 9) / 5 + 32;
-const mmToIn = (mm) => mm == null ? null : mm / 25.4;
-const cmToIn = (cm) => cm == null ? null : cm / 2.54;
+const toF = (c) => (c == null ? null : (c * 9) / 5 + 32);
+const mmToIn = (mm) => (mm == null ? null : mm / 25.4);
+const cmToIn = (cm) => (cm == null ? null : cm / 2.54);
 
 // ******************* Weather API fetch *******************
 // buildForecastUrl constructs the Open-Meteo request for a location and window.
@@ -114,7 +118,8 @@ async function fetchLocation(location, options = {}) {
 
 // upsertWeatherDocs transforms the API payload into Mongo upsert operations.
 async function upsertWeatherDocs(location, name, data) {
-
+  const timezone = location?.tz_iana || data?.timezone || 'UTC';
+  const fallbackOffset = Number.isFinite(data?.utc_offset_seconds) ? data.utc_offset_seconds : 0;
   const times = data.hourly.time;
   const temps = data.hourly.temperature_2m;
   const feels = data.hourly.apparent_temperature;
@@ -128,8 +133,12 @@ async function upsertWeatherDocs(location, name, data) {
 
   const docs = [];
   for (let i = 0; i < times.length; i++) {
-    const dt = new Date(times[i]);
-    const epochMs = dt.getTime();
+    const epochMs = localDateTimeStringToUtcEpoch(times[i], timezone, fallbackOffset);
+    if (epochMs == null) {
+      continue;
+    }
+    const localParts = getLocalPartsFromUtc(epochMs, timezone);
+    const dt = new Date(epochMs);
     const { conditions, icon } = mapWeatherCode(weathercodes[i]);
 
     docs.push({
@@ -137,13 +146,13 @@ async function upsertWeatherDocs(location, name, data) {
       resort: name,
       locationId: String(location._id),
       dateTimeEpoch: epochMs,
-      dayOfWeek: dt.getUTCDay(),
-      date: dt.getUTCDate(),
-      month: dt.getUTCMonth() + 1,
-      year: dt.getUTCFullYear(),
+      dayOfWeek: localParts ? localParts.weekdayIndex : dt.getUTCDay(),
+      date: localParts ? localParts.day : dt.getUTCDate(),
+      month: localParts ? localParts.month : dt.getUTCMonth() + 1,
+      year: localParts ? localParts.year : dt.getUTCFullYear(),
       dateTime: times[i],
-      hour: dt.getUTCHours(),
-      min: dt.getUTCMinutes(),
+      hour: localParts ? localParts.hour : dt.getUTCHours(),
+      min: localParts ? localParts.minute : dt.getUTCMinutes(),
       precipProb: precipProb?.[i],
       precipType: [snowfall?.[i] > 0 ? 'snow' : 'rain'], // naive; adjust if needed
       precip: mmToIn(precip?.[i]),

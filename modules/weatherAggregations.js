@@ -61,12 +61,16 @@ function getLocalDayInfo(epoch, timeZone) {
   const year = Number(partValue('year'));
   const month = Number(partValue('month'));
   const day = Number(partValue('day'));
-  const hour = Number(partValue('hour'));
+  let hour = Number(partValue('hour'));
   const minute = Number(partValue('minute')) || 0;
   const second = Number(partValue('second')) || 0;
 
   if ([year, month, day].some((v) => Number.isNaN(v))) {
     return null;
+  }
+
+  if (hour === 24) {
+    hour = 0;
   }
 
   const localMs = Date.UTC(year, month - 1, day, hour, minute, second);

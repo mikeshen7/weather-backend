@@ -15,8 +15,9 @@ const defaults = {
   CLEAN_INTERVAL_HOURS: 24,
   BACKFILL_INTERVAL_HOURS: 24,
   DAYS_TO_KEEP: 60,
-  MAX_DISTANCE_MI: 30,
+  FETCH_RADIUS_MI: 30,
   CONFIG_REFRESH_INTERVAL_HOURS: 24,
+  LOCATION_RADIUS_MI: 5,
 };
 
 const DEFAULT_CONFIG = {
@@ -64,13 +65,17 @@ const DEFAULT_CONFIG = {
     value: defaults.DAYS_TO_KEEP,
     description: 'Number of days of hourly data to retain.'
   },
-  MAX_DISTANCE_MI: {
-    value: defaults.MAX_DISTANCE_MI,
+  FETCH_RADIUS_MI: {
+    value: defaults.FETCH_RADIUS_MI,
     description: 'Max distance (miles) when searching nearest location.'
   },
   CONFIG_REFRESH_INTERVAL_HOURS: {
     value: defaults.CONFIG_REFRESH_INTERVAL_HOURS,
     description: 'Interval between automatic config cache refreshes (hours).'
+  },
+  LOCATION_RADIUS_MI: {
+    value: defaults.LOCATION_RADIUS_MI,
+    description: 'Minimum allowed distance (miles) between stored locations.'
   },
 };
 
@@ -150,8 +155,9 @@ function buildValuesFromCache() {
     CLEAN_INTERVAL_HOURS: readValue('CLEAN_INTERVAL_HOURS', defaults.CLEAN_INTERVAL_HOURS),
     BACKFILL_INTERVAL_HOURS: readValue('BACKFILL_INTERVAL_HOURS', defaults.BACKFILL_INTERVAL_HOURS),
     DAYS_TO_KEEP: readValue('DAYS_TO_KEEP', defaults.DAYS_TO_KEEP),
-    MAX_DISTANCE_MI: readValue('MAX_DISTANCE_MI', defaults.MAX_DISTANCE_MI),
+    FETCH_RADIUS_MI: readValue('FETCH_RADIUS_MI', defaults.FETCH_RADIUS_MI),
     CONFIG_REFRESH_INTERVAL_HOURS: readValue('CONFIG_REFRESH_INTERVAL_HOURS', defaults.CONFIG_REFRESH_INTERVAL_HOURS),
+    LOCATION_RADIUS_MI: readValue('LOCATION_RADIUS_MI', defaults.LOCATION_RADIUS_MI),
   };
 }
 

@@ -10,11 +10,16 @@ async function endpointHourlyWeather(request, response, next) {
       return response.status(400).send('locationId query param is required');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const payload = await buildHourlyWeatherResponse({
       locationId,
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
     });
 
     return response.status(200).send(payload);
@@ -39,11 +44,16 @@ async function endpointHourlyWeatherByCoords(request, response, next) {
       return response.status(404).send('No nearby location found for supplied lat/lon');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const payload = await buildHourlyWeatherResponse({
       locationId: String(nearest.doc._id),
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
     });
 
     if (payload.location) {

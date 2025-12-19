@@ -22,12 +22,6 @@ const locationsSchema = new Schema(
   }
 );
 
-// Case-insensitive uniqueness on name + country + region
-locationsSchema.index(
-  { name: 1, country: 1, region: 1 },
-  { unique: true, collation: { locale: 'en', strength: 2 } }
-);
-
 // Prevent exact duplicate coordinates (centroid)
 locationsSchema.index({ lat: 1, lon: 1 }, { unique: true });
 

@@ -1,17 +1,12 @@
 'use strict';
 
 const locationsDb = require('../models/locationsDb');
+const { lookupCountryRegion } = require('./geoLookup');
+const appConfig = require('./appConfig');
 
 const locationCache = {
   locations: [],
 };
-
-function buildDisplayName(doc) {
-  const parts = [doc.name];
-  const locality = [doc.region, doc.country].filter(Boolean).join(', ');
-  if (locality) parts.push(locality);
-  return parts.join(' - ');
-}
 
 function parseBoolean(value) {
   if (value === undefined) return undefined;
@@ -35,19 +30,62 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+async function deriveCountryRegion(lat, lon) {
+  try {
+    return await lookupCountryRegion(lat, lon);
+  } catch (error) {
+    console.error('*** locations deriveCountryRegion error:', error.message);
+    return { country: 'Unknown', region: '' };
+  }
+}
+
+async function ensureLocationNotTooClose(lat, lon, excludeId) {
+  const radiusMi = appConfig.values().LOCATION_RADIUS_MI;
+  if (!radiusMi || radiusMi <= 0) {
+    return;
+  }
+  const radiusKm = radiusMi * 1.60934;
+  const deltaLat = radiusKm / 111;
+  const deltaLon = deltaLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);
+  const candidates = await locationsDb.find({
+    lat: { $gte: lat - deltaLat, $lte: lat + deltaLat },
+    lon: { $gte: lon - deltaLon, $lte: lon + deltaLon },
+  }).lean();
+
+  for (const candidate of candidates) {
+    if (excludeId && String(candidate._id) === String(excludeId)) continue;
+    const distanceKm = haversineKm(lat, lon, candidate.lat, candidate.lon);
+    if (distanceKm <= radiusKm) {
+      const error = new Error(`Location too close to existing "${candidate.name}" (${(distanceKm / 1.60934).toFixed(2)} mi)`);
+      error.status = 409;
+      throw error;
+    }
+  }
+}
+
 async function endpointCreateLocation(request, response, next) {
   try {
-    const { name, country, region = '', lat, lon, tz_iana, isSkiResort } = request.body || {};
-    if (!name || !country || lat === undefined || lon === undefined || !tz_iana) {
-      return response.status(400).send('name, country, lat, lon, and tz_iana are required');
+    const { name, lat, lon, tz_iana, isSkiResort } = request.body || {};
+    if (!name || lat === undefined || lon === undefined || !tz_iana) {
+      return response.status(400).send('name, lat, lon, and tz_iana are required');
     }
+
+    const numericLat = Number(lat);
+    const numericLon = Number(lon);
+    if (Number.isNaN(numericLat) || Number.isNaN(numericLon)) {
+      return response.status(400).send('lat and lon must be numbers');
+    }
+
+    await ensureLocationNotTooClose(numericLat, numericLon);
+
+    const { country, region } = await deriveCountryRegion(numericLat, numericLon);
 
     const doc = await locationsDb.create({
       name: String(name).trim(),
       country: String(country).trim(),
       region: String(region).trim(),
-      lat: Number(lat),
-      lon: Number(lon),
+      lat: numericLat,
+      lon: numericLon,
       tz_iana: String(tz_iana).trim(),
       isSkiResort: parseBoolean(isSkiResort) ?? false,
     });
@@ -63,7 +101,6 @@ async function endpointCreateLocation(request, response, next) {
     return response.status(201).send({
       id: doc._id,
       name: doc.name,
-      displayName: buildDisplayName(doc),
       country: doc.country,
       region: doc.region,
       lat: doc.lat,
@@ -74,8 +111,11 @@ async function endpointCreateLocation(request, response, next) {
       updatedAt: doc.updatedAt,
     });
   } catch (error) {
+    if (error.status === 409) {
+      return response.status(409).send(error.message);
+    }
     if (error.code === 11000) {
-      return response.status(409).send('Location already exists (name/country/region or lat/lon conflict)');
+      return response.status(409).send('Location already exists (lat/lon conflict)');
     }
     console.error('*** locations endpointCreateLocation error:', error.message);
     next(error);
@@ -101,7 +141,6 @@ async function endpointSearchLocations(request, response, next) {
     const results = docs.map((doc) => ({
       id: doc._id,
       name: doc.name,
-      displayName: buildDisplayName(doc),
       country: doc.country,
       region: doc.region,
       lat: doc.lat,
@@ -152,7 +191,6 @@ async function endpointNearestLocation(request, response, next) {
     return response.status(200).send({
       id: nearest._id,
       name: nearest.name,
-      displayName: buildDisplayName(nearest),
       country: nearest.country,
       region: nearest.region,
       lat: nearest.lat,
@@ -201,10 +239,20 @@ async function endpointUpdateLocation(request, response, next) {
       return response.status(400).send('Location id is required');
     }
 
-    const { name, country, region = '', lat, lon, tz_iana, isSkiResort } = request.body || {};
-    if (!name || !country || lat === undefined || lon === undefined || !tz_iana) {
-      return response.status(400).send('name, country, lat, lon, and tz_iana are required');
+    const { name, lat, lon, tz_iana, isSkiResort } = request.body || {};
+    if (!name || lat === undefined || lon === undefined || !tz_iana) {
+      return response.status(400).send('name, lat, lon, and tz_iana are required');
     }
+
+    const numericLat = Number(lat);
+    const numericLon = Number(lon);
+    if (Number.isNaN(numericLat) || Number.isNaN(numericLon)) {
+      return response.status(400).send('lat and lon must be numbers');
+    }
+
+    await ensureLocationNotTooClose(numericLat, numericLon, id);
+
+    const { country, region } = await deriveCountryRegion(numericLat, numericLon);
 
     const updated = await locationsDb.findByIdAndUpdate(
       id,
@@ -212,8 +260,8 @@ async function endpointUpdateLocation(request, response, next) {
         name: String(name).trim(),
         country: String(country).trim(),
         region: String(region).trim(),
-        lat: Number(lat),
-        lon: Number(lon),
+        lat: numericLat,
+        lon: numericLon,
         tz_iana: String(tz_iana).trim(),
         isSkiResort: parseBoolean(isSkiResort) ?? false,
       },
@@ -235,7 +283,6 @@ async function endpointUpdateLocation(request, response, next) {
     return response.status(200).send({
       id: updated._id,
       name: updated.name,
-      displayName: buildDisplayName(updated),
       country: updated.country,
       region: updated.region,
       lat: updated.lat,
@@ -246,8 +293,11 @@ async function endpointUpdateLocation(request, response, next) {
       updatedAt: updated.updatedAt,
     });
   } catch (error) {
+    if (error.status === 409) {
+      return response.status(409).send(error.message);
+    }
     if (error.code === 11000) {
-      return response.status(409).send('Location already exists (name/country/region or lat/lon conflict)');
+      return response.status(409).send('Location already exists (lat/lon conflict)');
     }
     console.error('*** locations endpointUpdateLocation error:', error.message);
     next(error);
@@ -267,11 +317,28 @@ function getCachedLocations() {
   return locationCache.locations;
 }
 
+async function endpointLookupLocationMetadata(request, response, next) {
+  try {
+    const lat = parseFloat(request.query.lat);
+    const lon = parseFloat(request.query.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      return response.status(400).send('lat and lon are required');
+    }
+    const { country, region } = await deriveCountryRegion(lat, lon);
+    return response.status(200).send({ country, region });
+  } catch (error) {
+    console.error('*** locations endpointLookupLocationMetadata error:', error.message);
+    next(error);
+  }
+}
+
 module.exports = {
   endpointSearchLocations,
   endpointNearestLocation,
   endpointCreateLocation,
   endpointDeleteLocation,
+  endpointUpdateLocation,
+  endpointLookupLocationMetadata,
   endpointUpdateLocation,
   startLocationMaintenance: async function startLocationMaintenance() {
     await refreshLocationsCache();

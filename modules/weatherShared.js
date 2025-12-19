@@ -4,6 +4,11 @@ const hourlyWeatherDb = require('../models/hourlyWeatherDb');
 const locationsDb = require('../models/locationsDb');
 const { clampDays } = require('./weatherAggregations');
 const appConfig = require('./appConfig');
+const {
+  getLocalPartsFromUtc,
+  localDateTimeToUtcEpoch,
+  shiftLocalDate,
+} = require('./timezone');
 
 // sanitizeDoc converts a Mongo doc into the API-safe payload shape.
 function sanitizeDoc(doc) {
@@ -78,6 +83,8 @@ async function queryHourlyDocs(options) {
     locationId,
     daysBack,
     daysForward,
+    startDateEpoch,
+    endDateEpoch,
     sort = 'asc',
     maxDaysBack,
     maxDaysForward,
@@ -87,6 +94,14 @@ async function queryHourlyDocs(options) {
     error.status = 400;
     throw error;
   }
+
+  const location = await fetchLocationDetail(locationId);
+  if (!location) {
+    const notFound = new Error('Location not found');
+    notFound.status = 404;
+    throw notFound;
+  }
+  const timeZone = location?.tz_iana || 'UTC';
 
   const config = appConfig.values();
   const {
@@ -98,15 +113,43 @@ async function queryHourlyDocs(options) {
   } = config;
   const filter = { locationId };
 
-  const now = Date.now();
-  const backDays = clampDays(daysBack, DEFAULT_DAYS_BACK, maxDaysBack ?? MAX_DAYS_BACK);
-  const forwardDays = clampDays(daysForward, DEFAULT_DAYS_FORWARD, maxDaysForward ?? MAX_DAYS_FORWARD);
-  const startAnchor = new Date(now - backDays * MS_PER_DAY);
-  startAnchor.setUTCHours(0, 0, 0, 0);
-  const endAnchor = new Date(now + forwardDays * MS_PER_DAY);
-  endAnchor.setUTCHours(23, 59, 59, 999);
-  const effectiveStart = startAnchor.getTime();
-  const effectiveEnd = endAnchor.getTime();
+  let effectiveStart;
+  let effectiveEnd;
+  if (startDateEpoch != null || endDateEpoch != null) {
+    effectiveStart = startDateEpoch;
+    effectiveEnd = endDateEpoch;
+  } else {
+    const backDays = clampDays(daysBack, DEFAULT_DAYS_BACK, maxDaysBack ?? MAX_DAYS_BACK);
+    const forwardDays = clampDays(daysForward, DEFAULT_DAYS_FORWARD, maxDaysForward ?? MAX_DAYS_FORWARD);
+    const nowParts = getLocalPartsFromUtc(Date.now(), timeZone);
+    const baseDateParts = nowParts
+      ? { year: nowParts.year, month: nowParts.month, day: nowParts.day }
+      : null;
+
+    if (baseDateParts) {
+      const startLocalDate = shiftLocalDate(baseDateParts, -backDays) || baseDateParts;
+      const endLocalDatePlusOne = shiftLocalDate(baseDateParts, forwardDays + 1) || baseDateParts;
+      effectiveStart = localDateTimeToUtcEpoch(
+        { ...startLocalDate, hour: 0, minute: 0, second: 0 },
+        timeZone
+      );
+      const endExclusive = localDateTimeToUtcEpoch(
+        { ...endLocalDatePlusOne, hour: 0, minute: 0, second: 0 },
+        timeZone
+      );
+      effectiveEnd = endExclusive != null ? endExclusive - 1 : undefined;
+    }
+
+    if (effectiveStart == null || effectiveEnd == null) {
+      const now = Date.now();
+      const fallbackStart = new Date(now - backDays * MS_PER_DAY);
+      fallbackStart.setUTCHours(0, 0, 0, 0);
+      const fallbackEnd = new Date(now + forwardDays * MS_PER_DAY);
+      fallbackEnd.setUTCHours(23, 59, 59, 999);
+      effectiveStart = fallbackStart.getTime();
+      effectiveEnd = fallbackEnd.getTime();
+    }
+  }
 
   const dateFilter = buildDateFilter(effectiveStart, effectiveEnd);
   if (dateFilter) {
@@ -118,8 +161,6 @@ async function queryHourlyDocs(options) {
     .find(filter)
     .sort({ dateTimeEpoch: sortDirection })
     .lean();
-
-  const location = await fetchLocationDetail(locationId);
 
   return { docs, location };
 }
@@ -150,7 +191,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 // findNearestLocation returns the closest stored location within bounds.
-async function findNearestLocation(lat, lon, maxDistanceMi = appConfig.values().MAX_DISTANCE_MI) {
+async function findNearestLocation(lat, lon, maxDistanceMi = appConfig.values().FETCH_RADIUS_MI) {
   const maxDistanceKm = maxDistanceMi * 1.60934;
   const deltaLat = maxDistanceKm / 111;
   const deltaLon = deltaLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);

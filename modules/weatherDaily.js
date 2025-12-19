@@ -12,11 +12,16 @@ async function endpointDailyOverview(request, response, next) {
       return response.status(400).send('locationId query param is required');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const { docs, location } = await queryHourlyDocs({
       locationId,
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
       maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
       maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
     });
@@ -44,11 +49,16 @@ async function endpointDailyOverviewByCoords(request, response, next) {
       return response.status(404).send('No nearby location found for supplied lat/lon');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const { docs, location } = await queryHourlyDocs({
       locationId: String(nearest.doc._id),
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
       maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
       maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
     });
@@ -73,11 +83,16 @@ async function endpointDailySegments(request, response, next) {
       return response.status(400).send('locationId query param is required');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const { docs, location } = await queryHourlyDocs({
       locationId,
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
     });
 
     const days = aggregateDailySegments(docs, location?.tz_iana);
@@ -103,11 +118,16 @@ async function endpointDailySegmentsByCoords(request, response, next) {
       return response.status(404).send('No nearby location found for supplied lat/lon');
     }
 
+    const startDateEpoch = request.query.startDateEpoch ? Number(request.query.startDateEpoch) : undefined;
+    const endDateEpoch = request.query.endDateEpoch ? Number(request.query.endDateEpoch) : undefined;
+
     const { docs, location } = await queryHourlyDocs({
       locationId: String(nearest.doc._id),
       daysBack: request.query.daysBack,
       daysForward: request.query.daysForward,
       sort: request.query.sort,
+      startDateEpoch,
+      endDateEpoch,
     });
 
     const days = aggregateDailySegments(docs, location?.tz_iana);
