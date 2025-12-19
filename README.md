@@ -21,6 +21,7 @@ npm install
 - Every client must include an API key in the `x-api-key` header (configurable via `CLIENT_API_KEY_HEADER`).
 - Admin-only endpoints under `/admin/api-clients` let you list clients, mint new keys (the raw key is returned once), and toggle active/revoked status.
 - The Admin UI (`/admin.html`) now includes an “API Keys” tab for issuing keys, viewing usage stats (including today’s call count), editing rate limits, copying the current key, revoking/reactivating clients, and deleting keys without touching curl.
+- Default per-minute and daily quotas for new API clients are editable in the Config tab via `CLIENT_RATE_LIMIT_DEFAULT` and `CLIENT_DAILY_QUOTA_DEFAULT`, so you can raise/lower plan defaults without touching env vars.
 - Requests are rate limited with a token bucket backed by Mongo (`CLIENT_API_RATE_WINDOW_MIN`, `CLIENT_API_RATE_LIMIT_DEFAULT`, `CLIENT_API_DAILY_QUOTA_DEFAULT` control defaults). per-client overrides live on the client document.
 - Usage stats (`totalUsage`, `lastUsedAt`) are updated on each request. Counters reset automatically as the TTL’d usage windows expire.
 

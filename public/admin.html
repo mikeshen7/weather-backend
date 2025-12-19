@@ -317,6 +317,9 @@
       }
     });
 
+    let defaultClientRateLimit = null;
+    let defaultClientDailyQuota = null;
+
     const STORED_TOKEN_KEY = 'weather_admin_token';
     const storedToken = localStorage.getItem(STORED_TOKEN_KEY);
     if (storedToken) {
@@ -376,6 +379,7 @@
         const data = await fetchConfigData(token);
         renderTable(data, token);
         setStatus('Loaded ' + data.length + ' entries');
+        updateApiDefaultsFromConfig(data);
         setAdminToken(token);
       } catch (err) {
         setStatus(err.message);
@@ -419,19 +423,20 @@
       const data = await fetchConfigData(token);
       setAdminToken(token);
       renderTable(data, token);
+      updateApiDefaultsFromConfig(data);
       authStatus.textContent = '';
-        authGate.classList.add('hidden');
-        appContent.classList.remove('hidden');
-        showToast('Admin access granted');
-        loadLocations();
-        loadHourlyLocationsDropdown();
-        loadApiClients();
-        localStorage.setItem(STORED_TOKEN_KEY, token);
-        if (storedTabId) {
-          activateTab(storedTabId);
-        } else {
-          activateTab('locationsTab');
-        }
+      authGate.classList.add('hidden');
+      appContent.classList.remove('hidden');
+      showToast('Admin access granted');
+      loadLocations();
+      loadHourlyLocationsDropdown();
+      loadApiClients();
+      localStorage.setItem(STORED_TOKEN_KEY, token);
+      if (storedTabId) {
+        activateTab(storedTabId);
+      } else {
+        activateTab('locationsTab');
+      }
     }
 
     function setAdminToken(token) {
@@ -495,6 +500,28 @@
       statusEl.textContent = msg || '';
     }
 
+    function updateApiDefaultsFromConfig(entries) {
+      if (!Array.isArray(entries)) return;
+      const rateEntry = entries.find((entry) => entry.key === 'CLIENT_RATE_LIMIT_DEFAULT');
+      const quotaEntry = entries.find((entry) => entry.key === 'CLIENT_DAILY_QUOTA_DEFAULT');
+
+      if (rateEntry && apiClientRateInput) {
+        const numericRate = Number(rateEntry.value);
+        if (Number.isFinite(numericRate)) {
+          defaultClientRateLimit = numericRate;
+          apiClientRateInput.placeholder = String(numericRate);
+        }
+      }
+
+      if (quotaEntry && apiClientDailyInput) {
+        const numericQuota = Number(quotaEntry.value);
+        if (Number.isFinite(numericQuota)) {
+          defaultClientDailyQuota = numericQuota;
+          apiClientDailyInput.placeholder = String(numericQuota);
+        }
+      }
+    }
+
     // Location references
     const locationTable = document.getElementById('locationsTable');
     const locationBody = locationTable.querySelector('tbody');
@@ -532,6 +559,8 @@
     const apiClientRegenerateKey = document.getElementById('apiClientRegenerateKey');
     const apiClientSubmitBtn = document.getElementById('apiClientSubmitBtn');
     const apiClientCancelBtn = document.getElementById('apiClientCancelBtn');
+    const apiClientRateInput = document.getElementById('apiClientRateLimit');
+    const apiClientDailyInput = document.getElementById('apiClientDailyQuota');
 
     document.getElementById('locationSearchForm').addEventListener('submit', (event) => {
       event.preventDefault();

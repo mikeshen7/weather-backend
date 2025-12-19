@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const apiClientDb = require('../models/apiClientDb');
+const appConfig = require('./appConfig');
 
 const { CLIENT_API_KEY_HASH_SECRET } = process.env;
 
@@ -20,6 +21,7 @@ function generateApiKey() {
 }
 
 async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQuota, metadata }) {
+  const defaults = appConfig.values();
   const rawKey = generateApiKey();
   const keyHash = hashKey(rawKey);
   const doc = await apiClientDb.create({
@@ -27,8 +29,8 @@ async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQu
     contactEmail: contactEmail ? String(contactEmail).trim() : '',
     keyHash,
     plan: plan ? String(plan).trim() : undefined,
-    rateLimitPerMin,
-    dailyQuota,
+    rateLimitPerMin: rateLimitPerMin ?? defaults.CLIENT_RATE_LIMIT_DEFAULT,
+    dailyQuota: dailyQuota ?? defaults.CLIENT_DAILY_QUOTA_DEFAULT,
     latestPlainApiKey: rawKey,
     metadata,
   });

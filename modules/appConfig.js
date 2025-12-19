@@ -2,6 +2,9 @@
 
 const appConfigDb = require('../models/appConfigDb');
 
+const rateLimitDefault = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
+const dailyQuotaDefault = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
+
 const defaults = {
   MS_PER_DAY: 24 * 60 * 60 * 1000,
   DEFAULT_DAYS_BACK: 3,
@@ -18,6 +21,8 @@ const defaults = {
   FETCH_RADIUS_MI: 30,
   CONFIG_REFRESH_INTERVAL_HOURS: 24,
   LOCATION_RADIUS_MI: 5,
+  CLIENT_RATE_LIMIT_DEFAULT: Number.isFinite(rateLimitDefault) ? rateLimitDefault : 60,
+  CLIENT_DAILY_QUOTA_DEFAULT: Number.isFinite(dailyQuotaDefault) ? dailyQuotaDefault : 5000,
 };
 
 const DEFAULT_CONFIG = {
@@ -76,6 +81,14 @@ const DEFAULT_CONFIG = {
   LOCATION_RADIUS_MI: {
     value: defaults.LOCATION_RADIUS_MI,
     description: 'Minimum allowed distance (miles) between stored locations.'
+  },
+  CLIENT_RATE_LIMIT_DEFAULT: {
+    value: defaults.CLIENT_RATE_LIMIT_DEFAULT,
+    description: 'Default per-minute request limit for new API clients (set <=0 for unlimited).'
+  },
+  CLIENT_DAILY_QUOTA_DEFAULT: {
+    value: defaults.CLIENT_DAILY_QUOTA_DEFAULT,
+    description: 'Default daily request quota for new API clients (set <=0 for unlimited).'
   },
 };
 
@@ -158,6 +171,8 @@ function buildValuesFromCache() {
     FETCH_RADIUS_MI: readValue('FETCH_RADIUS_MI', defaults.FETCH_RADIUS_MI),
     CONFIG_REFRESH_INTERVAL_HOURS: readValue('CONFIG_REFRESH_INTERVAL_HOURS', defaults.CONFIG_REFRESH_INTERVAL_HOURS),
     LOCATION_RADIUS_MI: readValue('LOCATION_RADIUS_MI', defaults.LOCATION_RADIUS_MI),
+    CLIENT_RATE_LIMIT_DEFAULT: readValue('CLIENT_RATE_LIMIT_DEFAULT', defaults.CLIENT_RATE_LIMIT_DEFAULT),
+    CLIENT_DAILY_QUOTA_DEFAULT: readValue('CLIENT_DAILY_QUOTA_DEFAULT', defaults.CLIENT_DAILY_QUOTA_DEFAULT),
   };
 }
 

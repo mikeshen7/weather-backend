@@ -3,6 +3,7 @@
 const apiUsageDb = require('../models/apiUsageDb');
 const apiDailyUsageDb = require('../models/apiDailyUsageDb');
 const apiClientDb = require('../models/apiClientDb');
+const appConfig = require('./appConfig');
 
 const WINDOW_MINUTES = Number(process.env.CLIENT_API_RATE_WINDOW_MIN) || 1;
 
@@ -13,6 +14,30 @@ function getWindowStart(date = new Date()) {
 
 function getDayKey(date = new Date()) {
   return date.toISOString().slice(0, 10); // YYYY-MM-DD UTC
+}
+
+function resolveDefaultRateLimit() {
+  const configValue = Number(appConfig.values().CLIENT_RATE_LIMIT_DEFAULT);
+  if (Number.isFinite(configValue)) {
+    return configValue;
+  }
+  const envValue = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
+  if (Number.isFinite(envValue)) {
+    return envValue;
+  }
+  return 60;
+}
+
+function resolveDefaultDailyQuota() {
+  const configValue = Number(appConfig.values().CLIENT_DAILY_QUOTA_DEFAULT);
+  if (Number.isFinite(configValue)) {
+    return configValue;
+  }
+  const envValue = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
+  if (Number.isFinite(envValue)) {
+    return envValue;
+  }
+  return 5000;
 }
 
 async function trackUsage(request, response, next) {
@@ -34,8 +59,8 @@ async function trackUsage(request, response, next) {
       { new: true, upsert: true }
     );
 
-    const defaultRate = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
-    const rateLimit = client.rateLimitPerMin ?? (Number.isFinite(defaultRate) ? defaultRate : 60);
+    const defaultRate = resolveDefaultRateLimit();
+    const rateLimit = client.rateLimitPerMin ?? defaultRate;
 
     if (rateLimit > 0 && updateResult.count > rateLimit) {
       return response.status(429).send('Rate limit exceeded');
@@ -48,8 +73,8 @@ async function trackUsage(request, response, next) {
       { new: true, upsert: true }
     );
 
-    const defaultQuota = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
-    const dailyQuota = client.dailyQuota ?? (Number.isFinite(defaultQuota) ? defaultQuota : 5000);
+    const defaultQuota = resolveDefaultDailyQuota();
+    const dailyQuota = client.dailyQuota ?? defaultQuota;
 
     if (dailyQuota > 0 && dailyUsage.count > dailyQuota) {
       return response.status(429).send('Daily quota exceeded');
