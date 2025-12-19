@@ -8,6 +8,11 @@
     h1 { margin-bottom: 0.5rem; }
     .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
     label { display: inline-block; margin-right: 0.5rem; }
+    label > input,
+    label > select,
+    label > textarea {
+      margin-left: 0.35rem;
+    }
     input[type="text"] { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
     button { padding: 0.4rem 0.9rem; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -72,6 +77,7 @@
       <button class="tab-btn active" data-tab="locationsTab">Locations</button>
       <button class="tab-btn" data-tab="hourlyTab">Hourly</button>
       <button class="tab-btn" data-tab="dailyTab">Daily</button>
+      <button class="tab-btn" data-tab="apiKeysTab">API Keys</button>
       <button class="tab-btn" data-tab="configTab">Config</button>
     </div>
 
@@ -229,6 +235,52 @@
       <div id="dailyStatus" class="status"></div>
     </div>
 
+    <div id="apiKeysTab" class="tab-panel">
+      <h2>API Keys</h2>
+      <p>Issue client API keys and manage rate limits. Copy new keys immediately&mdash;they are shown once.</p>
+      <form id="apiClientForm" class="flex-row">
+        <input type="hidden" id="apiClientEditingId" />
+        <label>Name<input type="text" id="apiClientName" required /></label>
+        <label>Email<input type="email" id="apiClientEmail" placeholder="client@example.com" /></label>
+        <label>Plan<input type="text" id="apiClientPlan" placeholder="free/pro/enterprise" /></label>
+        <label>Rate / min<input type="number" min="1" id="apiClientRateLimit" placeholder="60" /></label>
+        <label>Daily quota<input type="number" min="1" id="apiClientDailyQuota" placeholder="5000" /></label>
+        <label>Metadata
+          <input type="text" id="apiClientMetadata" placeholder='Optional JSON, e.g. {"notes":"beta"}' />
+        </label>
+        <label id="apiClientRegenerateRow" class="hidden">
+          <input type="checkbox" id="apiClientRegenerateKey" />
+          Regenerate API key
+        </label>
+        <div class="form-actions">
+          <button type="submit" id="apiClientSubmitBtn">Create API Key</button>
+          <button type="button" id="apiClientCancelBtn" style="display:none;">Cancel</button>
+          <button type="button" id="apiClientsRefreshBtn">Refresh</button>
+        </div>
+      </form>
+      <div id="apiClientResult" class="status"></div>
+      <table id="apiClientsTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Requests Today</th>
+            <th>Total Usage</th>
+            <th>Rate/Min Limit</th>
+            <th>Daily Limit</th>
+            <th>API Key</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Last Used</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="apiClientsStatus" class="status"></div>
+    </div>
+
     <div id="configTab" class="tab-panel">
       <h2>Config Constants</h2>
       <div>
@@ -250,6 +302,7 @@
   <script>
     const { DateTime } = luxon;
     let adminToken = '';
+    let hasLoadedApiClients = false;
     const authGate = document.getElementById('authGate');
     const appContent = document.getElementById('appContent');
     const masterTokenInput = document.getElementById('masterToken');
@@ -264,15 +317,36 @@
       }
     });
 
+    const STORED_TOKEN_KEY = 'weather_admin_token';
+    const storedToken = localStorage.getItem(STORED_TOKEN_KEY);
+    if (storedToken) {
+      attemptAutoUnlock(storedToken);
+    }
+
+    const tabStorageKey = 'weather_admin_active_tab';
+    const storedTabId = localStorage.getItem(tabStorageKey);
+
     // Tab handling
     const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    function activateTab(tabId) {
+      tabButtons.forEach((btn) => {
+        const isActive = btn.dataset.tab === tabId;
+        btn.classList.toggle('active', isActive);
+      });
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle('active', panel.id === tabId);
+      });
+      if (tabId === 'apiKeysTab' && !hasLoadedApiClients) {
+        loadApiClients();
+      }
+      localStorage.setItem(tabStorageKey, tabId);
+    }
+
     tabButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        tabButtons.forEach((b) => b.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.remove('active'));
-        btn.classList.add('active');
-        const panel = document.getElementById(btn.dataset.tab);
-        if (panel) panel.classList.add('active');
+        activateTab(btn.dataset.tab);
       });
     });
 
@@ -325,18 +399,39 @@
       }
       authStatus.textContent = 'Verifying...';
       try {
-        const data = await fetchConfigData(token);
-        setAdminToken(token);
-        renderTable(data, token);
+        await completeUnlock(token);
+      } catch (err) {
+        authStatus.textContent = err.message || 'Invalid token';
+      }
+    }
+
+    async function attemptAutoUnlock(token) {
+      try {
+        authStatus.textContent = 'Restoring session...';
+        await completeUnlock(token);
+      } catch (err) {
         authStatus.textContent = '';
+        localStorage.removeItem(STORED_TOKEN_KEY);
+      }
+    }
+
+    async function completeUnlock(token) {
+      const data = await fetchConfigData(token);
+      setAdminToken(token);
+      renderTable(data, token);
+      authStatus.textContent = '';
         authGate.classList.add('hidden');
         appContent.classList.remove('hidden');
         showToast('Admin access granted');
         loadLocations();
         loadHourlyLocationsDropdown();
-      } catch (err) {
-        authStatus.textContent = err.message || 'Invalid token';
-      }
+        loadApiClients();
+        localStorage.setItem(STORED_TOKEN_KEY, token);
+        if (storedTabId) {
+          activateTab(storedTabId);
+        } else {
+          activateTab('locationsTab');
+        }
     }
 
     function setAdminToken(token) {
@@ -426,6 +521,17 @@
     const dailyTableBody = dailyTable.querySelector('tbody');
     const loadDailyBtn = document.getElementById('loadDailyBtn');
     const toastEl = document.getElementById('toast');
+    const apiClientForm = document.getElementById('apiClientForm');
+    const apiClientsRefreshBtn = document.getElementById('apiClientsRefreshBtn');
+    const apiClientResult = document.getElementById('apiClientResult');
+    const apiClientsTable = document.getElementById('apiClientsTable');
+    const apiClientsBody = apiClientsTable ? apiClientsTable.querySelector('tbody') : null;
+    const apiClientsStatus = document.getElementById('apiClientsStatus');
+    const apiClientEditingId = document.getElementById('apiClientEditingId');
+    const apiClientRegenerateRow = document.getElementById('apiClientRegenerateRow');
+    const apiClientRegenerateKey = document.getElementById('apiClientRegenerateKey');
+    const apiClientSubmitBtn = document.getElementById('apiClientSubmitBtn');
+    const apiClientCancelBtn = document.getElementById('apiClientCancelBtn');
 
     document.getElementById('locationSearchForm').addEventListener('submit', (event) => {
       event.preventDefault();
@@ -445,6 +551,15 @@
     setDefaultDailyDates();
     loadHourlyBtn.addEventListener('click', loadHourlyWeather);
     loadDailyBtn.addEventListener('click', loadDailyWeather);
+    if (apiClientForm) {
+      apiClientForm.addEventListener('submit', submitApiClient);
+    }
+    if (apiClientsRefreshBtn) {
+      apiClientsRefreshBtn.addEventListener('click', () => loadApiClients());
+    }
+    if (apiClientCancelBtn) {
+      apiClientCancelBtn.addEventListener('click', resetApiClientForm);
+    }
 
     async function loadLocations() {
       const query = document.getElementById('locationQuery').value.trim();
@@ -454,7 +569,12 @@
       if (resort) params.set('isSkiResort', resort);
       setLocationStatus('Loading locations...');
       try {
-        const res = await fetch('/locations?' + params.toString());
+        const headers = buildAdminHeaders();
+        if (!headers) {
+          setLocationStatus('Admin token is required to load locations');
+          return;
+        }
+        const res = await fetch('/locations?' + params.toString(), { headers });
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         renderLocations(data);
@@ -599,6 +719,289 @@
       return '';
     }
 
+    function buildAdminHeaders() {
+      const token = getLocationAdminToken();
+      if (!token) return null;
+      return { 'x-admin-token': token };
+    }
+
+    async function loadApiClients() {
+      if (!apiClientsStatus) return;
+      const headers = buildAdminHeaders();
+      if (!headers) {
+        apiClientsStatus.textContent = 'Admin token is required for API key management';
+        return;
+      }
+      apiClientsStatus.textContent = 'Loading API clients...';
+      try {
+        const res = await fetch('/admin/api-clients', { headers });
+        if (!res.ok) throw new Error('Failed to load API clients');
+        const data = await res.json();
+        renderApiClients(data || []);
+        hasLoadedApiClients = true;
+        apiClientsStatus.textContent = `Loaded ${data?.length || 0} clients`;
+      } catch (err) {
+        apiClientsStatus.textContent = err.message;
+        showToast(err.message, true);
+      }
+    }
+
+    function renderApiClients(clients) {
+      if (!apiClientsBody) return;
+      apiClientsBody.innerHTML = '';
+      (clients || []).forEach((client) => {
+        const toggleLabel = client.status === 'active' ? 'Revoke' : 'Activate';
+        const keyDisplay = client.latestPlainApiKey || 'Not stored';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${client.name || ''}</td>
+          <td>${client.contactEmail || ''}</td>
+          <td>${client.currentDayUsage ?? 0}</td>
+          <td>${client.totalUsage ?? 0}</td>
+          <td>${client.rateLimitPerMin ?? ''}</td>
+          <td>${client.dailyQuota ?? ''}</td>
+          <td><code>${keyDisplay}</code></td>
+          <td>${client.plan || ''}</td>
+          <td>${client.status || ''}</td>
+          <td>${formatDateTimeLocal(client.lastUsedAt)}</td>
+          <td>${formatDateTimeLocal(client.createdAt)}</td>
+          <td>
+            <button type="button" class="api-edit-btn" data-id="${client._id}">Edit</button>
+            <button type="button" class="api-toggle-btn" data-id="${client._id}">${toggleLabel}</button>
+            <button type="button" class="api-delete-btn" data-id="${client._id}">Delete</button>
+          </td>
+        `;
+        const editBtn = tr.querySelector('.api-edit-btn');
+        if (editBtn) {
+          editBtn.addEventListener('click', () => startEditApiClient(client));
+        }
+        const toggleBtn = tr.querySelector('.api-toggle-btn');
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', () => toggleApiClient(client._id));
+        }
+        const deleteBtn = tr.querySelector('.api-delete-btn');
+        if (deleteBtn) {
+          deleteBtn.addEventListener('click', () => deleteApiClient(client));
+        }
+        apiClientsBody.appendChild(tr);
+      });
+      if (apiClientsTable) {
+        apiClientsTable.style.display = clients?.length ? 'table' : 'none';
+      }
+    }
+
+    async function submitApiClient(event) {
+      event.preventDefault();
+      if (!apiClientsStatus) return;
+      const headers = buildAdminHeaders();
+      if (!headers) {
+        apiClientsStatus.textContent = 'Admin token is required for API key management';
+        return;
+      }
+      const nameInput = document.getElementById('apiClientName');
+      const emailInput = document.getElementById('apiClientEmail');
+      const planInput = document.getElementById('apiClientPlan');
+      const rateLimitInput = document.getElementById('apiClientRateLimit');
+      const dailyQuotaInput = document.getElementById('apiClientDailyQuota');
+      const metadataInput = document.getElementById('apiClientMetadata');
+      const editingId = apiClientEditingId?.value;
+      const isEditing = Boolean(editingId);
+      const payload = {};
+      const name = nameInput?.value.trim();
+      if (!name) {
+        apiClientResult.textContent = 'Name is required';
+        return;
+      }
+      payload.name = name;
+      const email = emailInput?.value.trim();
+      if (email) payload.contactEmail = email;
+      const plan = planInput?.value.trim();
+      if (plan) payload.plan = plan;
+      const rateLimit = Number(rateLimitInput?.value);
+      if (!Number.isNaN(rateLimit) && rateLimit > 0) {
+        payload.rateLimitPerMin = rateLimit;
+      }
+      const dailyQuota = Number(dailyQuotaInput?.value);
+      if (!Number.isNaN(dailyQuota) && dailyQuota > 0) {
+        payload.dailyQuota = dailyQuota;
+      }
+      const metadataValue = metadataInput?.value.trim();
+      const metadata = parseMetadataInput(metadataValue);
+      if (metadata) {
+        payload.metadata = metadata;
+      }
+      if (isEditing) {
+        payload.regenerateKey = Boolean(apiClientRegenerateKey?.checked);
+      }
+      apiClientResult.textContent = '';
+      apiClientsStatus.textContent = isEditing ? 'Saving client...' : 'Creating API key...';
+      try {
+        headers['Content-Type'] = 'application/json';
+        const endpoint = isEditing ? `/admin/api-clients/${editingId}` : '/admin/api-clients';
+        const method = isEditing ? 'PUT' : 'POST';
+        const res = await fetch(endpoint, {
+          method,
+          headers,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to save API client');
+        }
+        const data = await res.json();
+        const apiKey = data?.apiKey;
+        if (apiKey) {
+          apiClientResult.textContent = `API key (copy now): ${apiKey}`;
+        } else {
+          apiClientResult.textContent = isEditing ? 'Client updated' : 'Client created';
+        }
+        showToast(isEditing ? 'Client updated' : 'API key created');
+        resetApiClientForm();
+        loadApiClients();
+      } catch (err) {
+        apiClientResult.textContent = err.message;
+        showToast(err.message, true);
+      } finally {
+        apiClientsStatus.textContent = '';
+      }
+    }
+
+    async function toggleApiClient(clientId) {
+      if (!clientId || !apiClientsStatus) return;
+      const headers = buildAdminHeaders();
+      if (!headers) {
+        apiClientsStatus.textContent = 'Admin token is required for API key management';
+        return;
+      }
+      apiClientsStatus.textContent = 'Updating client...';
+      try {
+        const res = await fetch(`/admin/api-clients/${clientId}/toggle`, {
+          method: 'POST',
+          headers,
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to update client');
+        }
+        showToast('Client updated');
+        loadApiClients();
+      } catch (err) {
+        apiClientsStatus.textContent = err.message;
+        showToast(err.message, true);
+      } finally {
+        setTimeout(() => {
+          apiClientsStatus.textContent = '';
+        }, 1500);
+      }
+    }
+
+    async function deleteApiClient(client) {
+      if (!client || !apiClientsStatus) return;
+      if (!confirm(`Delete API client "${client.name || client._id}"? This cannot be undone.`)) {
+        return;
+      }
+      const headers = buildAdminHeaders();
+      if (!headers) {
+        apiClientsStatus.textContent = 'Admin token is required for API key management';
+        return;
+      }
+      apiClientsStatus.textContent = 'Deleting client...';
+      try {
+        const res = await fetch(`/admin/api-clients/${client._id}`, {
+          method: 'DELETE',
+          headers,
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to delete client');
+        }
+        showToast('Client deleted');
+        resetApiClientForm();
+        loadApiClients();
+      } catch (err) {
+        apiClientsStatus.textContent = err.message;
+        showToast(err.message, true);
+      } finally {
+        setTimeout(() => {
+          apiClientsStatus.textContent = '';
+        }, 1500);
+      }
+    }
+
+    function startEditApiClient(client) {
+      if (!client || !apiClientForm) return;
+      if (apiClientEditingId) {
+        apiClientEditingId.value = client._id;
+      }
+      setInputValue('apiClientName', client.name || '');
+      setInputValue('apiClientEmail', client.contactEmail || '');
+      setInputValue('apiClientPlan', client.plan || '');
+      setInputValue('apiClientRateLimit', client.rateLimitPerMin ?? '');
+      setInputValue('apiClientDailyQuota', client.dailyQuota ?? '');
+      setInputValue('apiClientMetadata', stringifyMetadata(client.metadata));
+      if (apiClientSubmitBtn) {
+        apiClientSubmitBtn.textContent = 'Save Changes';
+      }
+      if (apiClientCancelBtn) {
+        apiClientCancelBtn.style.display = 'inline-block';
+      }
+      if (apiClientRegenerateRow) {
+        apiClientRegenerateRow.classList.remove('hidden');
+      }
+      if (apiClientRegenerateKey) {
+        apiClientRegenerateKey.checked = false;
+      }
+      apiClientResult.textContent = `Editing ${client.name || client._id}`;
+    }
+
+    function resetApiClientForm() {
+      if (!apiClientForm) return;
+      apiClientForm.reset();
+      if (apiClientEditingId) {
+        apiClientEditingId.value = '';
+      }
+      if (apiClientSubmitBtn) {
+        apiClientSubmitBtn.textContent = 'Create API Key';
+      }
+      if (apiClientCancelBtn) {
+        apiClientCancelBtn.style.display = 'none';
+      }
+      if (apiClientRegenerateRow) {
+        apiClientRegenerateRow.classList.add('hidden');
+      }
+      if (apiClientRegenerateKey) {
+        apiClientRegenerateKey.checked = false;
+      }
+      apiClientResult.textContent = '';
+    }
+
+    function parseMetadataInput(value) {
+      if (!value) return undefined;
+      try {
+        return JSON.parse(value);
+      } catch (err) {
+        return { notes: value };
+      }
+    }
+
+    function stringifyMetadata(metadata) {
+      if (!metadata || typeof metadata !== 'object') {
+        return '';
+      }
+      try {
+        return JSON.stringify(metadata);
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function setInputValue(id, value) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = value ?? '';
+      }
+    }
+
     function getSelectedLocationTimezone(selectEl) {
       if (!selectEl) return DEFAULT_TIME_ZONE;
       const option = selectEl.options?.[selectEl.selectedIndex];
@@ -629,7 +1032,13 @@
 
     async function loadHourlyLocationsDropdown() {
       try {
-        const res = await fetch('/locations?limit=200');
+        const headers = buildAdminHeaders();
+        if (!headers) {
+          hourlyStatus.textContent = 'Admin token is required to load locations';
+          dailyStatus.textContent = 'Admin token is required to load locations';
+          return;
+        }
+        const res = await fetch('/locations?limit=200', { headers });
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         const sorted = (data || []).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
@@ -934,6 +1343,15 @@
         return '';
       }
       return `${Number(value).toFixed(0)}%`;
+    }
+
+    function formatDateTimeLocal(value) {
+      if (!value) return '-';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) {
+        return '-';
+      }
+      return dt.toLocaleString();
     }
 
     function formatLocationDateTime(row, timeZone) {

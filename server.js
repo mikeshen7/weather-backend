@@ -12,6 +12,9 @@ const weatherDaily = require('./modules/weatherDaily');
 const appConfig = require('./modules/appConfig');
 const adminConfig = require('./modules/adminConfig');
 const { requireAdminToken } = require('./modules/auth');
+const { requireClientApiKey } = require('./modules/clientAuth');
+const { trackUsage } = require('./modules/usageTracker');
+const adminApiClients = require('./modules/adminApiClients');
 
 // *** Database connection and test
 const databaseName = process.env.DB_NAME || 'weather';
@@ -34,6 +37,7 @@ app.listen(PORT, () => console.log(`server listening on ${PORT}`));
 
 // *** Location Endpoints
 app.post('/locations', requireAdminToken, (request, response, next) => locations.endpointCreateLocation(request, response, next));
+app.use(['/locations', '/weather'], requireClientApiKey, trackUsage);
 app.get('/locations', (request, response, next) => locations.endpointSearchLocations(request, response, next));
 app.get('/locations/nearest', (request, response, next) => locations.endpointNearestLocation(request, response, next));
 app.get('/locations/lookup', (request, response, next) => locations.endpointLookupLocationMetadata(request, response, next));
@@ -51,6 +55,11 @@ app.get('/weather/daily/segments/by-coords', (request, response, next) => weathe
 // *** Admin Config Endpoints
 app.get('/admin/config', requireAdminToken, (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
 app.put('/admin/config/:key', requireAdminToken, (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
+app.get('/admin/api-clients', requireAdminToken, (req, res, next) => adminApiClients.endpointListClients(req, res, next));
+app.post('/admin/api-clients', requireAdminToken, (req, res, next) => adminApiClients.endpointCreateClient(req, res, next));
+app.put('/admin/api-clients/:id', requireAdminToken, (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
+app.post('/admin/api-clients/:id/toggle', requireAdminToken, (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
+app.delete('/admin/api-clients/:id', requireAdminToken, (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
 
 // *** Misc ENDPOINTS
 app.get('/', (request, response) => response.status(200).send('Welcome'));
