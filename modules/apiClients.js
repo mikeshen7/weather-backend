@@ -21,7 +21,13 @@ function generateApiKey() {
 }
 
 async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQuota, metadata }) {
-  const defaults = appConfig.values();
+  const configValues = appConfig.values();
+  const resolvedRateLimit = Number.isFinite(Number(rateLimitPerMin))
+    ? Number(rateLimitPerMin)
+    : Number(configValues.CLIENT_RATE_LIMIT_DEFAULT);
+  const resolvedDailyQuota = Number.isFinite(Number(dailyQuota))
+    ? Number(dailyQuota)
+    : Number(configValues.CLIENT_DAILY_QUOTA_DEFAULT);
   const rawKey = generateApiKey();
   const keyHash = hashKey(rawKey);
   const doc = await apiClientDb.create({
@@ -29,8 +35,8 @@ async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQu
     contactEmail: contactEmail ? String(contactEmail).trim() : '',
     keyHash,
     plan: plan ? String(plan).trim() : undefined,
-    rateLimitPerMin: rateLimitPerMin ?? defaults.CLIENT_RATE_LIMIT_DEFAULT,
-    dailyQuota: dailyQuota ?? defaults.CLIENT_DAILY_QUOTA_DEFAULT,
+    rateLimitPerMin: Number.isFinite(resolvedRateLimit) ? resolvedRateLimit : configValues.CLIENT_RATE_LIMIT_DEFAULT,
+    dailyQuota: Number.isFinite(resolvedDailyQuota) ? resolvedDailyQuota : configValues.CLIENT_DAILY_QUOTA_DEFAULT,
     latestPlainApiKey: rawKey,
     metadata,
   });

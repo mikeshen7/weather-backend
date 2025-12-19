@@ -100,11 +100,9 @@ async function ensureWeatherConfigDefaults() {
     await appConfigDb.updateOne(
       { key },
       {
-        $set: {
-          value: meta.value,
-        },
         $setOnInsert: {
           key,
+          value: meta.value,
           description: meta.description,
         },
       },
