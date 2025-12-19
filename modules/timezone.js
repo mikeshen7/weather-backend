@@ -3,6 +3,7 @@
 const EXPLICIT_TZ_REGEX = /(Z|[+-]\d{2}:?\d{2})$/i;
 const dateTimeFormatterCache = new Map();
 const weekdayFormatterCache = new Map();
+const localOffsetCache = new Map();
 const WEEKDAY_INDEX = {
   Sunday: 0,
   Monday: 1,
@@ -12,6 +13,12 @@ const WEEKDAY_INDEX = {
   Friday: 5,
   Saturday: 6,
 };
+
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
 
 function getDateTimeFormatter(timeZone = 'UTC') {
   if (dateTimeFormatterCache.has(timeZone)) {
@@ -126,7 +133,42 @@ function getLocalPartsFromUtc(epochMs, timeZone = 'UTC') {
     second,
     offsetMs,
     weekdayIndex,
+    dateKey: `${year}-${pad2(month)}-${pad2(day)}`,
+    weekdayLabel: WEEKDAY_LABELS[weekdayIndex ?? 0] || WEEKDAY_LABELS[0],
   };
+}
+
+function getOffsetForLocalDateTime(parts, timeZone, fallbackOffsetSeconds = 0) {
+  const { year, month, day, hour = 0, minute = 0, second = 0 } = parts;
+  const key = `${timeZone}|${year}|${month}|${day}|${hour}|${minute}|${second}`;
+  if (localOffsetCache.has(key)) {
+    return localOffsetCache.get(key);
+  }
+
+  const baseMs = Date.UTC(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, second || 0, 0);
+  if (!timeZone) {
+    const offset = (fallbackOffsetSeconds || 0) * 1000;
+    localOffsetCache.set(key, offset);
+    return offset;
+  }
+
+  let offsetMs = (fallbackOffsetSeconds || 0) * 1000;
+  let epoch = baseMs;
+  for (let i = 0; i < 3; i++) {
+    const localInfo = getLocalPartsFromUtc(epoch, timeZone);
+    if (!localInfo) {
+      break;
+    }
+    offsetMs = localInfo.offsetMs;
+    const adjusted = baseMs - offsetMs;
+    if (Math.abs(adjusted - epoch) < 1) {
+      break;
+    }
+    epoch = adjusted;
+  }
+
+  localOffsetCache.set(key, offsetMs);
+  return offsetMs;
 }
 
 function localDateTimeToUtcEpoch(parts, timeZone = 'UTC', fallbackOffsetSeconds = 0) {
@@ -137,24 +179,8 @@ function localDateTimeToUtcEpoch(parts, timeZone = 'UTC', fallbackOffsetSeconds 
   }
 
   const baseMs = Date.UTC(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, second || 0, 0);
-  if (!timeZone) {
-    return baseMs - (fallbackOffsetSeconds || 0) * 1000;
-  }
-
-  let epoch = baseMs;
-  for (let i = 0; i < 3; i++) {
-    const localInfo = getLocalPartsFromUtc(epoch, timeZone);
-    if (!localInfo) {
-      return baseMs - (fallbackOffsetSeconds || 0) * 1000;
-    }
-    const adjusted = baseMs - localInfo.offsetMs;
-    if (Math.abs(adjusted - epoch) < 1) {
-      epoch = adjusted;
-      break;
-    }
-    epoch = adjusted;
-  }
-  return epoch;
+  const offsetMs = getOffsetForLocalDateTime({ year, month, day, hour, minute, second }, timeZone, fallbackOffsetSeconds);
+  return baseMs - offsetMs;
 }
 
 function localDateTimeStringToUtcEpoch(isoString, timeZone = 'UTC', fallbackOffsetSeconds = 0) {
@@ -194,9 +220,35 @@ function shiftLocalDate(parts, deltaDays) {
   };
 }
 
+function formatDateKey(parts) {
+  if (!parts) return null;
+  const { year, month, day } = parts;
+  if ([year, month, day].some((value) => value == null || Number.isNaN(value))) {
+    return null;
+  }
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+function getWeekdayLabel(index) {
+  return WEEKDAY_LABELS[index ?? 0] || WEEKDAY_LABELS[0];
+}
+
+function getLocalStartOfDayEpoch(parts) {
+  if (!parts) return null;
+  const { year, month, day, offsetMs = 0 } = parts;
+  if ([year, month, day].some((value) => value == null || Number.isNaN(value))) {
+    return null;
+  }
+  return Date.UTC(year, month - 1, day, 0, 0, 0) - offsetMs;
+}
+
 module.exports = {
   getLocalPartsFromUtc,
   localDateTimeToUtcEpoch,
   localDateTimeStringToUtcEpoch,
   shiftLocalDate,
+  WEEKDAY_LABELS,
+  formatDateKey,
+  getWeekdayLabel,
+  getLocalStartOfDayEpoch,
 };

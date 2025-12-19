@@ -1,7 +1,11 @@
 'use strict';
 
-const dateTimeFormatterCache = new Map();
-const weekdayFormatterCache = new Map();
+const {
+  getLocalPartsFromUtc,
+  formatDateKey,
+  getWeekdayLabel,
+  getLocalStartOfDayEpoch,
+} = require('./timezone');
 
 // clampDays confines user-provided day counts to a safe positive range.
 function clampDays(value, fallback, max) {
@@ -15,74 +19,21 @@ function clampDays(value, fallback, max) {
   return Math.min(numeric, max);
 }
 
-// pad2 ensures numbers render as two-digit strings (e.g., months/days).
-function pad2(value) {
-  return String(value).padStart(2, '0');
-}
-
-// getDateTimeFormatter reuses Intl formatters per timezone for date parts.
-function getDateTimeFormatter(timeZone) {
-  if (!dateTimeFormatterCache.has(timeZone)) {
-    dateTimeFormatterCache.set(
-      timeZone,
-      new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      })
-    );
-  }
-  return dateTimeFormatterCache.get(timeZone);
-}
-
-// getWeekdayFormatter caches Intl weekday formatters per timezone.
-function getWeekdayFormatter(timeZone) {
-  if (!weekdayFormatterCache.has(timeZone)) {
-    weekdayFormatterCache.set(
-      timeZone,
-      new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long' })
-    );
-  }
-  return weekdayFormatterCache.get(timeZone);
-}
-
 // getLocalDayInfo derives local day metadata (date key, weekday, hour).
 function getLocalDayInfo(epoch, timeZone) {
   const tz = timeZone || 'UTC';
-  const date = new Date(epoch);
-  const formatter = getDateTimeFormatter(tz);
-  const parts = formatter.formatToParts(date);
-  const partValue = (type) => parts.find((p) => p.type === type)?.value;
-  const year = Number(partValue('year'));
-  const month = Number(partValue('month'));
-  const day = Number(partValue('day'));
-  let hour = Number(partValue('hour'));
-  const minute = Number(partValue('minute')) || 0;
-  const second = Number(partValue('second')) || 0;
-
-  if ([year, month, day].some((v) => Number.isNaN(v))) {
+  const local = getLocalPartsFromUtc(epoch, tz);
+  if (!local) {
     return null;
   }
 
-  if (hour === 24) {
-    hour = 0;
-  }
-
-  const localMs = Date.UTC(year, month - 1, day, hour, minute, second);
-  const offsetMs = localMs - epoch;
-  const startOfDayEpoch = Date.UTC(year, month - 1, day, 0, 0, 0) - offsetMs;
-  const weekday = getWeekdayFormatter(tz).format(date);
+  const startOfDayEpoch = getLocalStartOfDayEpoch(local);
 
   return {
-    dateKey: `${year}-${pad2(month)}-${pad2(day)}`,
+    dateKey: local.dateKey || formatDateKey(local),
     startOfDayEpoch,
-    weekday,
-    localHour: Number.isNaN(hour) ? null : hour,
+    weekday: local.weekdayLabel || getWeekdayLabel(local.weekdayIndex),
+    localHour: Number.isNaN(local.hour) ? null : local.hour,
   };
 }
 

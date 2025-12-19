@@ -53,11 +53,21 @@
     .toast.success {
       background: #2ecc71;
     }
+    .hidden { display: none !important; }
+    .auth-gate { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .auth-gate input { min-width: 240px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Admin Console</h1>
+    <div id="authGate" class="auth-gate">
+      <label for="masterToken">Admin Token:</label>
+      <input type="password" id="masterToken" placeholder="Enter admin token to unlock" />
+      <button id="unlockBtn">Unlock</button>
+      <div id="authStatus" class="status"></div>
+    </div>
+    <div id="appContent" class="hidden">
     <div class="tabs">
       <button class="tab-btn active" data-tab="locationsTab">Locations</button>
       <button class="tab-btn" data-tab="hourlyTab">Hourly</button>
@@ -222,9 +232,7 @@
     <div id="configTab" class="tab-panel">
       <h2>Config Constants</h2>
       <div>
-        <label for="token">Admin Token:</label>
-        <input type="text" id="token" placeholder="Enter token" />
-        <button id="loadBtn">Load Config</button>
+        <button id="loadBtn">Reload Config</button>
       </div>
       <table id="configTable" style="display:none;">
         <thead>
@@ -234,12 +242,28 @@
       </table>
       <div id="status" class="status"></div>
     </div>
+    </div>
   </div>
   <div id="toast" class="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
   <script>
     const { DateTime } = luxon;
+    let adminToken = '';
+    const authGate = document.getElementById('authGate');
+    const appContent = document.getElementById('appContent');
+    const masterTokenInput = document.getElementById('masterToken');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const authStatus = document.getElementById('authStatus');
+    const tokenRows = document.querySelectorAll('.token-row');
+    unlockBtn.addEventListener('click', unlockAdmin);
+    masterTokenInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        unlockAdmin();
+      }
+    });
+
     // Tab handling
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach((btn) => {
@@ -256,9 +280,8 @@
     const table = document.getElementById('configTable');
     const tbody = table.querySelector('tbody');
     const statusEl = document.getElementById('status');
-    const configTokenInput = document.getElementById('token');
     const locationTokenInput = document.getElementById('locationToken');
-    document.getElementById('loadBtn').addEventListener('click', loadConfig);
+    document.getElementById('loadBtn').addEventListener('click', () => loadConfig());
     const timezoneSelect = document.getElementById('newTz');
     const derivedCountryEl = document.getElementById('derivedCountry');
     const derivedRegionEl = document.getElementById('derivedRegion');
@@ -269,26 +292,63 @@
     latInput.addEventListener('blur', fetchDerivedMetadata);
     lonInput.addEventListener('blur', fetchDerivedMetadata);
 
-    async function loadConfig() {
-      const token = configTokenInput.value.trim();
+    async function loadConfig(overrideToken) {
+      const token = overrideToken ?? adminToken;
       if (!token) {
-        return setStatus('Token is required');
+        return setStatus('Admin token required');
       }
       setStatus('Loading...');
       try {
-        const res = await fetch('/admin/config', { headers: { 'x-admin-token': token } });
-        if (!res.ok) {
-          throw new Error('Request failed: ' + res.status);
-        }
-        const data = await res.json();
+        const data = await fetchConfigData(token);
         renderTable(data, token);
         setStatus('Loaded ' + data.length + ' entries');
-        if (!locationTokenInput.value.trim()) {
-          locationTokenInput.value = token;
-        }
+        setAdminToken(token);
       } catch (err) {
         setStatus(err.message);
       }
+    }
+
+    async function fetchConfigData(token) {
+      const res = await fetch('/admin/config', { headers: { 'x-admin-token': token } });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Request failed: ' + res.status);
+      }
+      return res.json();
+    }
+
+    async function unlockAdmin() {
+      const token = masterTokenInput.value.trim();
+      if (!token) {
+        authStatus.textContent = 'Token is required';
+        return;
+      }
+      authStatus.textContent = 'Verifying...';
+      try {
+        const data = await fetchConfigData(token);
+        setAdminToken(token);
+        renderTable(data, token);
+        authStatus.textContent = '';
+        authGate.classList.add('hidden');
+        appContent.classList.remove('hidden');
+        showToast('Admin access granted');
+        loadLocations();
+        loadHourlyLocationsDropdown();
+      } catch (err) {
+        authStatus.textContent = err.message || 'Invalid token';
+      }
+    }
+
+    function setAdminToken(token) {
+      if (!token) return;
+      adminToken = token;
+      [locationTokenInput, hourlyTokenInput, dailyTokenInput].forEach((input) => {
+        if (input) {
+          input.value = token;
+          input.readOnly = true;
+        }
+      });
+      tokenRows.forEach((row) => row.classList.add('hidden'));
     }
 
     function renderTable(entries, token) {
@@ -381,7 +441,6 @@
         resetLocationForm();
       }
     });
-    loadHourlyLocationsDropdown();
     setDefaultHourlyDates();
     setDefaultDailyDates();
     loadHourlyBtn.addEventListener('click', loadHourlyWeather);
@@ -531,12 +590,11 @@
     }
 
     function getLocationAdminToken() {
+      if (adminToken) return adminToken;
       const explicit = locationTokenInput.value.trim();
-      if (explicit) return explicit;
-      const fallback = configTokenInput?.value?.trim();
-      if (fallback) {
-        locationTokenInput.value = fallback;
-        return fallback;
+      if (explicit) {
+        setAdminToken(explicit);
+        return explicit;
       }
       return '';
     }
@@ -644,7 +702,7 @@
       hourlyStatus.textContent = 'Loading hourly data...';
       try {
         const headers = {};
-        const token = hourlyTokenInput.value.trim();
+        const token = hourlyTokenInput.value.trim() || adminToken;
         if (token) headers['x-admin-token'] = token;
         const res = await fetch('/weather/hourly?' + params.toString(), { headers });
         if (!res.ok) {
@@ -696,7 +754,7 @@
       dailyStatus.textContent = 'Loading daily data...';
       try {
         const headers = {};
-        const token = dailyTokenInput.value.trim();
+        const token = dailyTokenInput.value.trim() || adminToken;
         if (token) headers['x-admin-token'] = token;
         const res = await fetch(endpoint + '?' + params.toString(), { headers });
         if (!res.ok) {
