@@ -33,13 +33,13 @@ npm install
 - Set `ADMIN_ENABLED=true` plus:
   - `ADMIN_MAGIC_LINK_BASE_URL` (e.g. `http://localhost:3001` for dev),
   - `ADMIN_SESSION_SECRET` (strong random string),
-  - `ADMIN_SESSION_TTL_MINUTES` and `ADMIN_MAGIC_TOKEN_TTL_MINUTES` for session/link lifetimes,
   - `ADMIN_COOKIE_SECURE` (`false` for local HTTP, `true` for HTTPS),
   - `ADMIN_BOOTSTRAP_EMAIL` to allow creating the first admin when they request a link.
 - SMTP (Gmail example): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=<gmail address>`, `SMTP_PASS=<app password>`, `SMTP_FROM=<from address>`. Gmail requires an App Password.
 - Flow: enter admin email on `/admin.html` → backend emails a one-time link → clicking it sets an HttpOnly admin session cookie and redirects back. Logout clears the cookie. Admin requests rely on the session, not bearer tokens.
 - Roles: bootstrap email gets `owner` + `admin`; new users can be `admin` (full) or `read-only`. Read-only users can view Locations/Hourly/Daily but cannot modify locations or access API Keys/Config/Admins tabs.
 - Admin rate limit is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX`, `ADMIN_RATE_LIMIT_WINDOW_MS` keys).
+  - Session/magic token lifetimes are configurable via Config UI (`ADMIN_SESSION_TTL_MINUTES`, `ADMIN_MAGIC_TOKEN_TTL_MINUTES`).
 
 ## Endpoints (key ones)
 

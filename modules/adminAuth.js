@@ -5,12 +5,11 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const adminUserDb = require('../models/adminUserDb');
 const adminMagicTokenDb = require('../models/adminMagicTokenDb');
+const appConfig = require('./appConfig');
 
 const ADMIN_ENABLED = process.env.ADMIN_ENABLED === 'true';
 const COOKIE_NAME = 'adminSession';
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET;
-const SESSION_TTL_MINUTES = Number(process.env.ADMIN_SESSION_TTL_MINUTES) || 60;
-const MAGIC_TOKEN_TTL_MINUTES = Number(process.env.ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
 const MAGIC_LINK_BASE_URL = process.env.ADMIN_MAGIC_LINK_BASE_URL;
 const COOKIE_SECURE = process.env.ADMIN_COOKIE_SECURE === 'true';
 const BOOTSTRAP_EMAIL = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
@@ -18,6 +17,10 @@ const OWNER_ROLE = 'owner';
 const ADMIN_ROLE = 'admin';
 const READONLY_ROLE = 'read-only';
 const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, READONLY_ROLE]);
+
+function getSessionTtlMinutes() {
+  return Number(appConfig.values().ADMIN_SESSION_TTL_MINUTES) || 60;
+}
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -60,7 +63,7 @@ function getTransporter() {
 async function sendMagicLinkEmail(email, link) {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const expiresMinutes = MAGIC_TOKEN_TTL_MINUTES;
+  const expiresMinutes = Number(appConfig.values().ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
   const text = [
     'Your admin login link:',
     link,
@@ -80,10 +83,11 @@ function createSessionToken(user) {
   if (!SESSION_SECRET) {
     throw new Error('ADMIN_SESSION_SECRET is not configured');
   }
+  const sessionTtlMinutes = getSessionTtlMinutes();
   return jwt.sign(
     { uid: String(user._id), email: user.email, roles: user.roles || [] },
     SESSION_SECRET,
-    { expiresIn: `${SESSION_TTL_MINUTES}m` }
+    { expiresIn: `${sessionTtlMinutes}m` }
   );
 }
 
@@ -100,6 +104,7 @@ async function handleRequestMagicLink(request, response) {
   if (!ADMIN_ENABLED) {
     return response.status(404).send('Not available');
   }
+  const magicTtlMinutes = Number(appConfig.values().ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
   const email = (request.body?.email || '').trim().toLowerCase();
   if (!email) {
     return response.status(400).send('email is required');
@@ -119,7 +124,7 @@ async function handleRequestMagicLink(request, response) {
   try {
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + MAGIC_TOKEN_TTL_MINUTES * 60 * 1000);
+    const expiresAt = new Date(Date.now() + magicTtlMinutes * 60 * 1000);
     await adminMagicTokenDb.create({
       user: user._id,
       tokenHash,
@@ -167,11 +172,12 @@ async function handleVerifyMagicLink(request, response) {
   await record.save();
 
   const sessionToken = createSessionToken(record.user);
+  const sessionTtlMinutes = getSessionTtlMinutes();
   response.cookie(COOKIE_NAME, sessionToken, {
     httpOnly: true,
     secure: COOKIE_SECURE,
     sameSite: 'strict',
-    maxAge: SESSION_TTL_MINUTES * 60 * 1000,
+    maxAge: sessionTtlMinutes * 60 * 1000,
     path: '/',
   });
 
