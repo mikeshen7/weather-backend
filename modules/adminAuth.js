@@ -110,6 +110,7 @@ async function handleRequestMagicLink(request, response) {
     return response.status(400).send('email is required');
   }
 
+  console.log(JSON.stringify({ event: 'admin_magic_link_request_received', email }));
   let user = await adminUserDb.findOne({ email, status: 'active' });
   if (!user && BOOTSTRAP_EMAIL && email === BOOTSTRAP_EMAIL) {
     user = await adminUserDb.create({ email, status: 'active', roles: [OWNER_ROLE, ADMIN_ROLE] });
@@ -134,6 +135,7 @@ async function handleRequestMagicLink(request, response) {
     });
     link = buildMagicLink(token, request.body?.redirectPath);
     await sendMagicLinkEmail(user.email, link);
+    console.log(JSON.stringify({ event: 'admin_magic_link_sent', email: user.email, expiresMinutes: magicTtlMinutes }));
   } catch (error) {
     console.error('*** admin request-link error:', error.message);
     return response.status(500).send('Could not send login link');
