@@ -28,11 +28,11 @@
     .tab-panel.active { display: block; }
     .flex-row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .flex-row label { margin-right: 0; }
+    label.query-group { display: flex; align-items: center; gap: 0.5rem; }
     form { margin-top: 1rem; }
     input[type="number"] { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
     select { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
     .form-actions { display: flex; gap: 0.5rem; align-items: center; }
-    .token-row { margin: 0.5rem 0 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
     .derived-meta { margin-top: 0.5rem; display: flex; gap: 1.5rem; font-weight: 600; }
     .toast {
       position: fixed;
@@ -67,26 +67,28 @@
   <div class="card">
     <h1>Admin Console</h1>
     <div id="authGate" class="auth-gate">
-      <label for="masterToken">Admin Token:</label>
-      <input type="password" id="masterToken" placeholder="Enter admin token to unlock" />
-      <button id="unlockBtn">Unlock</button>
+      <label for="loginEmail">Admin Email:</label>
+      <input type="email" id="loginEmail" placeholder="name@example.com" />
+      <button id="sendLinkBtn">Send Magic Link</button>
       <div id="authStatus" class="status"></div>
+      <p style="margin:0.5rem 0 0;font-size:0.9rem;color:#555;">We’ll email a one-time link. Keep this page open, then click the link on the same browser.</p>
     </div>
     <div id="appContent" class="hidden">
+    <div class="status" id="sessionStatus" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+      <span></span>
+      <button id="logoutBtn" class="hidden">Logout</button>
+    </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="locationsTab">Locations</button>
       <button class="tab-btn" data-tab="hourlyTab">Hourly</button>
       <button class="tab-btn" data-tab="dailyTab">Daily</button>
       <button class="tab-btn" data-tab="apiKeysTab">API Keys</button>
       <button class="tab-btn" data-tab="configTab">Config</button>
+      <button class="tab-btn" data-tab="usersTab">Users</button>
     </div>
 
     <div id="locationsTab" class="tab-panel active">
       <h2>Locations</h2>
-      <div class="token-row">
-        <label for="locationToken">Admin Token:</label>
-        <input type="text" id="locationToken" placeholder="Required for add/edit/delete" />
-      </div>
       <h3>Add Location</h3>
       <form id="locationForm" class="flex-row">
         <label>Name<input type="text" id="newName" required /></label>
@@ -113,9 +115,10 @@
       </form>
 
       <form id="locationSearchForm" class="flex-row">
-        <label>
+        <label class="query-group">
           Query:
           <input type="text" id="locationQuery" placeholder="Name contains..." />
+          <button type="submit">Search</button>
         </label>
         <label>
           Resort Only:
@@ -125,7 +128,6 @@
             <option value="false">No</option>
           </select>
         </label>
-        <button type="submit">Search</button>
       </form>
       <table id="locationsTable" style="display:none;">
         <thead>
@@ -147,10 +149,6 @@
 
     <div id="hourlyTab" class="tab-panel">
       <h2>Hourly Weather</h2>
-      <div class="token-row">
-        <label for="hourlyToken">Admin Token:</label>
-        <input type="text" id="hourlyToken" placeholder="Optional (only if endpoint secured)" />
-      </div>
       <div class="flex-row">
         <label>
           Location:
@@ -187,10 +185,6 @@
 
     <div id="dailyTab" class="tab-panel">
       <h2>Daily Overview</h2>
-      <div class="token-row">
-        <label for="dailyToken">Admin Token:</label>
-        <input type="text" id="dailyToken" placeholder="Optional" />
-      </div>
       <div class="flex-row">
         <label>
           Location:
@@ -270,6 +264,8 @@
             <th>Daily Limit</th>
             <th>API Key</th>
             <th>Plan</th>
+            <th>Role</th>
+            <th>Location Access</th>
             <th>Status</th>
             <th>Last Used</th>
             <th>Created</th>
@@ -294,6 +290,55 @@
       </table>
       <div id="status" class="status"></div>
     </div>
+
+    <div id="usersTab" class="tab-panel">
+      <h2>Admin Users</h2>
+      <form id="adminUserForm" class="flex-row">
+        <input type="hidden" id="adminUserId" />
+        <label>Email<input type="email" id="adminUserEmail" required placeholder="admin@example.com" /></label>
+        <label>Name<input type="text" id="adminUserName" placeholder="Optional" /></label>
+        <label>Role
+          <select id="adminUserRoleSelect">
+            <option value="admin">Admin (full access)</option>
+            <option value="read-only">Read-only (no writes, limited tabs)</option>
+          </select>
+        </label>
+        <label>Status
+          <select id="adminUserStatus">
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </label>
+        <label>Location Access
+          <select id="adminUserLocationAccess">
+            <option value="all">All Locations</option>
+            <option value="resort-only">Resort Only</option>
+            <option value="non-resort-only">Non-Resort Only</option>
+          </select>
+        </label>
+        <div class="form-actions">
+          <button type="submit" id="adminUserSubmitBtn">Save User</button>
+          <button type="button" id="adminUserCancelBtn" style="display:none;">Cancel</button>
+          <button type="button" id="adminUserRefreshBtn">Refresh</button>
+        </div>
+      </form>
+      <div id="adminUsersStatus" class="status"></div>
+      <table id="adminUsersTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Roles</th>
+            <th>Location Access</th>
+            <th>Status</th>
+            <th>Last Login</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
     </div>
   </div>
   <div id="toast" class="toast"></div>
@@ -301,30 +346,27 @@
   <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
   <script>
     const { DateTime } = luxon;
-    let adminToken = '';
+    let sessionUser = null;
+    let sessionLocationAccess = 'all';
     let hasLoadedApiClients = false;
     const authGate = document.getElementById('authGate');
     const appContent = document.getElementById('appContent');
-    const masterTokenInput = document.getElementById('masterToken');
-    const unlockBtn = document.getElementById('unlockBtn');
+    const loginEmailInput = document.getElementById('loginEmail');
+    const sendLinkBtn = document.getElementById('sendLinkBtn');
     const authStatus = document.getElementById('authStatus');
-    const tokenRows = document.querySelectorAll('.token-row');
-    unlockBtn.addEventListener('click', unlockAdmin);
-    masterTokenInput.addEventListener('keydown', (event) => {
+    const sessionStatus = document.getElementById('sessionStatus');
+    const logoutBtn = document.getElementById('logoutBtn');
+    sendLinkBtn.addEventListener('click', requestMagicLink);
+    loginEmailInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        unlockAdmin();
+        requestMagicLink();
       }
     });
+    logoutBtn.addEventListener('click', logout);
 
     let defaultClientRateLimit = null;
     let defaultClientDailyQuota = null;
-
-    const STORED_TOKEN_KEY = 'weather_admin_token';
-    const storedToken = localStorage.getItem(STORED_TOKEN_KEY);
-    if (storedToken) {
-      attemptAutoUnlock(storedToken);
-    }
 
     const tabStorageKey = 'weather_admin_active_tab';
     const storedTabId = localStorage.getItem(tabStorageKey);
@@ -357,7 +399,6 @@
     const table = document.getElementById('configTable');
     const tbody = table.querySelector('tbody');
     const statusEl = document.getElementById('status');
-    const locationTokenInput = document.getElementById('locationToken');
     document.getElementById('loadBtn').addEventListener('click', () => loadConfig());
     const timezoneSelect = document.getElementById('newTz');
     const derivedCountryEl = document.getElementById('derivedCountry');
@@ -369,69 +410,84 @@
     latInput.addEventListener('blur', fetchDerivedMetadata);
     lonInput.addEventListener('blur', fetchDerivedMetadata);
 
-    async function loadConfig(overrideToken) {
-      const token = overrideToken ?? adminToken;
-      if (!token) {
-        return setStatus('Admin token required');
-      }
-      setStatus('Loading...');
+    async function bootstrap() {
       try {
-        const data = await fetchConfigData(token);
-        renderTable(data, token);
-        setStatus('Loaded ' + data.length + ' entries');
-        updateApiDefaultsFromConfig(data);
-        setAdminToken(token);
+        await checkSession();
       } catch (err) {
-        setStatus(err.message);
+        showLogin();
       }
     }
 
-    async function fetchConfigData(token) {
-      const res = await fetch('/admin/config', { headers: { 'x-admin-token': token } });
+    async function checkSession() {
+      const res = await fetch('/admin/auth/session', { credentials: 'include' });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Request failed: ' + res.status);
-      }
-      return res.json();
-    }
-
-    async function unlockAdmin() {
-      const token = masterTokenInput.value.trim();
-      if (!token) {
-        authStatus.textContent = 'Token is required';
+        showLogin();
         return;
       }
-      authStatus.textContent = 'Verifying...';
-      try {
-        await completeUnlock(token);
-      } catch (err) {
-        authStatus.textContent = err.message || 'Invalid token';
+      const data = await res.json();
+      if (data.authenticated) {
+        setAuthenticated(data.user);
+      } else {
+        showLogin();
       }
     }
 
-    async function attemptAutoUnlock(token) {
+    async function requestMagicLink() {
+      const email = loginEmailInput.value.trim();
+      if (!email) {
+        authStatus.textContent = 'Email is required';
+        return;
+      }
+      authStatus.textContent = 'Sending link...';
+      sendLinkBtn.disabled = true;
       try {
-        authStatus.textContent = 'Restoring session...';
-        await completeUnlock(token);
+        const res = await fetch('/admin/auth/request-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, redirectPath: '/admin.html' }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Could not send link');
+        }
+        authStatus.textContent = 'Check your email for the magic link. Use this browser to open it.';
       } catch (err) {
-        authStatus.textContent = '';
-        localStorage.removeItem(STORED_TOKEN_KEY);
+        authStatus.textContent = err.message;
+      } finally {
+        sendLinkBtn.disabled = false;
       }
     }
 
-    async function completeUnlock(token) {
-      const data = await fetchConfigData(token);
-      setAdminToken(token);
-      renderTable(data, token);
-      updateApiDefaultsFromConfig(data);
-      authStatus.textContent = '';
+    function setAuthenticated(user) {
+      sessionUser = user;
+      sessionLocationAccess = user?.locationAccess || 'all';
+      const roles = Array.isArray(user?.roles) ? user.roles : [];
+      const isOwnerOrAdmin = roles.includes('owner') || roles.includes('admin');
+      const isReadOnly = roles.includes('read-only') && !isOwnerOrAdmin;
       authGate.classList.add('hidden');
       appContent.classList.remove('hidden');
+      const statusText = sessionStatus?.querySelector('span');
+      if (statusText) {
+        statusText.textContent = user?.email ? `Signed in as ${user.email}` : 'Signed in';
+      }
+      if (logoutBtn) {
+        logoutBtn.classList.remove('hidden');
+      }
       showToast('Admin access granted');
+      if (isOwnerOrAdmin) {
+        loadConfig();
+        loadApiClients();
+        loadAdminUsers();
+      } else {
+        hideTab('apiKeysTab');
+        hideTab('configTab');
+        hideTab('usersTab');
+        disableLocationWrites();
+      }
+      applyLocationAccessUI();
       loadLocations();
       loadHourlyLocationsDropdown();
-      loadApiClients();
-      localStorage.setItem(STORED_TOKEN_KEY, token);
       if (storedTabId) {
         activateTab(storedTabId);
       } else {
@@ -439,19 +495,77 @@
       }
     }
 
-    function setAdminToken(token) {
-      if (!token) return;
-      adminToken = token;
-      [locationTokenInput, hourlyTokenInput, dailyTokenInput].forEach((input) => {
-        if (input) {
-          input.value = token;
-          input.readOnly = true;
-        }
-      });
-      tokenRows.forEach((row) => row.classList.add('hidden'));
+    function hideTab(tabId) {
+      const tabButton = Array.from(tabButtons).find((btn) => btn.dataset.tab === tabId);
+      const panel = document.getElementById(tabId);
+      if (tabButton) tabButton.style.display = 'none';
+      if (panel) panel.style.display = 'none';
     }
 
-    function renderTable(entries, token) {
+    function disableLocationWrites() {
+      if (locationForm) {
+        locationForm.classList.add('hidden');
+      }
+      const addHeading = document.querySelector('#locationsTab h3');
+      if (addHeading) addHeading.style.display = 'none';
+      const locationSearchForm = document.getElementById('locationSearchForm');
+      if (locationSearchForm) {
+        locationSearchForm.querySelectorAll('input, select, button').forEach((el) => {
+          el.disabled = false;
+        });
+      }
+    }
+
+    function applyLocationAccessUI() {
+      const resortLabel = locationResortSelect ? locationResortSelect.parentElement : null;
+      if (sessionLocationAccess === 'resort-only') {
+        if (locationResortSelect) {
+          locationResortSelect.value = 'true';
+        }
+        if (resortLabel) resortLabel.style.display = 'none';
+      } else if (sessionLocationAccess === 'non-resort-only') {
+        if (locationResortSelect) locationResortSelect.value = 'false';
+        if (resortLabel) resortLabel.style.display = 'none';
+      } else {
+        if (resortLabel) resortLabel.style.display = '';
+      }
+    }
+
+    function showLogin() {
+      sessionUser = null;
+      hasLoadedApiClients = false;
+      authGate.classList.remove('hidden');
+      appContent.classList.add('hidden');
+      const statusText = sessionStatus?.querySelector('span');
+      if (statusText) {
+        statusText.textContent = '';
+      }
+      if (logoutBtn) {
+        logoutBtn.classList.add('hidden');
+      }
+    }
+
+    async function logout() {
+      await fetch('/admin/auth/logout', { method: 'POST', credentials: 'include' });
+      showLogin();
+      authStatus.textContent = 'Signed out';
+    }
+
+    async function loadConfig() {
+      setStatus('Loading...');
+      try {
+        const res = await authFetch('/admin/config');
+        const data = await res.json();
+        renderTable(data);
+        setStatus('Loaded ' + data.length + ' entries');
+        updateApiDefaultsFromConfig(data);
+      } catch (err) {
+        setStatus(err.message);
+      }
+    }
+
+
+    function renderTable(entries) {
       tbody.innerHTML = '';
       entries.forEach((entry) => {
         const tr = document.createElement('tr');
@@ -466,11 +580,10 @@
         button.addEventListener('click', async () => {
           button.disabled = true;
           try {
-            const res = await fetch('/admin/config/' + entry.key, {
+            const res = await authFetch('/admin/config/' + entry.key, {
               method: 'PUT',
               headers: {
                 'Content-Type': 'application/json',
-                'x-admin-token': token,
               },
               body: JSON.stringify({ value: parseValue(input.value) }),
             });
@@ -531,7 +644,6 @@
     const cancelEditBtn = document.getElementById('cancelEditBtn');
     const editingIdInput = document.getElementById('editingId');
     const hourlySelect = document.getElementById('hourlyLocationSelect');
-    const hourlyTokenInput = document.getElementById('hourlyToken');
     const hourlyStartInput = document.getElementById('hourlyStartDate');
     const hourlyEndInput = document.getElementById('hourlyEndDate');
     const hourlyStatus = document.getElementById('hourlyStatus');
@@ -539,7 +651,6 @@
     const hourlyTableBody = hourlyTable.querySelector('tbody');
     const loadHourlyBtn = document.getElementById('loadHourlyBtn');
     const dailySelect = document.getElementById('dailyLocationSelect');
-    const dailyTokenInput = document.getElementById('dailyToken');
     const dailyStartInput = document.getElementById('dailyStartDate');
     const dailyEndInput = document.getElementById('dailyEndDate');
     const dailyStatus = document.getElementById('dailyStatus');
@@ -561,11 +672,28 @@
     const apiClientCancelBtn = document.getElementById('apiClientCancelBtn');
     const apiClientRateInput = document.getElementById('apiClientRateLimit');
     const apiClientDailyInput = document.getElementById('apiClientDailyQuota');
+    const adminUserForm = document.getElementById('adminUserForm');
+    const adminUserId = document.getElementById('adminUserId');
+    const adminUserEmail = document.getElementById('adminUserEmail');
+    const adminUserName = document.getElementById('adminUserName');
+    const adminUserRoleSelect = document.getElementById('adminUserRoleSelect');
+    const adminUserStatusSelect = document.getElementById('adminUserStatus');
+    const adminUserLocationAccess = document.getElementById('adminUserLocationAccess');
+    const adminUserSubmitBtn = document.getElementById('adminUserSubmitBtn');
+    const adminUserCancelBtn = document.getElementById('adminUserCancelBtn');
+    const adminUserRefreshBtn = document.getElementById('adminUserRefreshBtn');
+    const adminUsersStatus = document.getElementById('adminUsersStatus');
+    const adminUsersTable = document.getElementById('adminUsersTable');
+    const adminUsersBody = adminUsersTable ? adminUsersTable.querySelector('tbody') : null;
 
     document.getElementById('locationSearchForm').addEventListener('submit', (event) => {
       event.preventDefault();
       loadLocations();
     });
+    const locationResortSelect = document.getElementById('locationResort');
+    if (locationResortSelect) {
+      locationResortSelect.addEventListener('change', () => loadLocations());
+    }
     locationForm.addEventListener('submit', submitLocation);
     cancelEditBtn.addEventListener('click', () => {
       resetLocationForm();
@@ -589,21 +717,31 @@
     if (apiClientCancelBtn) {
       apiClientCancelBtn.addEventListener('click', resetApiClientForm);
     }
+    if (adminUserForm) {
+      adminUserForm.addEventListener('submit', submitAdminUser);
+    }
+    if (adminUserRefreshBtn) {
+      adminUserRefreshBtn.addEventListener('click', () => loadAdminUsers());
+    }
+    if (adminUserCancelBtn) {
+      adminUserCancelBtn.addEventListener('click', resetAdminUserForm);
+    }
 
     async function loadLocations() {
       const query = document.getElementById('locationQuery').value.trim();
       const resort = document.getElementById('locationResort').value;
       const params = new URLSearchParams();
       if (query) params.set('q', query);
-      if (resort) params.set('isSkiResort', resort);
+      if (sessionLocationAccess === 'resort-only') {
+        params.set('isSkiResort', 'true');
+      } else if (sessionLocationAccess === 'non-resort-only') {
+        params.set('isSkiResort', 'false');
+      } else if (resort) {
+        params.set('isSkiResort', resort);
+      }
       setLocationStatus('Loading locations...');
       try {
-        const headers = buildAdminHeaders();
-        if (!headers) {
-          setLocationStatus('Admin token is required to load locations');
-          return;
-        }
-        const res = await fetch('/locations?' + params.toString(), { headers });
+        const res = await authFetch('/locations?' + params.toString());
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         renderLocations(data);
@@ -620,6 +758,7 @@
         return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
       });
       sorted.forEach((loc) => {
+        const isReadOnly = Array.isArray(sessionUser?.roles) && sessionUser.roles.includes('read-only') && !(sessionUser.roles.includes('owner') || sessionUser.roles.includes('admin'));
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${loc.name}</td>
@@ -630,14 +769,18 @@
           <td>${loc.tz_iana || ''}</td>
           <td>${loc.isSkiResort ? 'Yes' : 'No'}</td>
           <td>
-            <button type="button" class="edit-btn">Edit</button>
-            <button type="button" class="delete-btn" data-id="${loc.id}">Delete</button>
+            <button type="button" class="edit-btn" ${isReadOnly ? 'style="display:none;"' : ''}>Edit</button>
+            <button type="button" class="delete-btn" data-id="${loc.id}" ${isReadOnly ? 'style="display:none;"' : ''}>Delete</button>
           </td>
         `;
-        const deleteBtn = tr.querySelector('.delete-btn');
-        deleteBtn.addEventListener('click', () => deleteLocation(loc.id));
         const editBtn = tr.querySelector('.edit-btn');
-        editBtn.addEventListener('click', () => startEditLocation(loc));
+        if (!isReadOnly && editBtn) {
+          editBtn.addEventListener('click', () => startEditLocation(loc));
+        }
+        const deleteBtn = tr.querySelector('.delete-btn');
+        if (!isReadOnly && deleteBtn) {
+          deleteBtn.addEventListener('click', () => deleteLocation(loc.id));
+        }
         locationBody.appendChild(tr);
       });
       locationTable.style.display = locations.length ? 'table' : 'none';
@@ -646,16 +789,10 @@
     async function deleteLocation(id) {
       if (!id) return;
       if (!confirm('Delete this location?')) return;
-      const adminToken = getLocationAdminToken();
-      if (!adminToken) {
-        setLocationStatus('Admin token is required for deleting locations');
-        return;
-      }
       setLocationStatus('Deleting location...');
       try {
-        const res = await fetch('/locations/' + id, {
+        const res = await authFetch('/locations/' + id, {
           method: 'DELETE',
-          headers: { 'x-admin-token': adminToken },
         });
         if (!res.ok) throw new Error('Delete failed');
         setLocationStatus('Deleted location');
@@ -670,11 +807,6 @@
     async function submitLocation(event) {
       event.preventDefault();
       const editingId = editingIdInput.value;
-      const adminToken = getLocationAdminToken();
-      if (!adminToken) {
-        setLocationStatus('Admin token is required for saving locations');
-        return;
-      }
       const payload = {
         name: document.getElementById('newName').value.trim(),
         lat: Number(latInput.value),
@@ -687,11 +819,10 @@
       }
       setLocationStatus(editingId ? 'Saving location...' : 'Creating location...');
       try {
-        const res = await fetch(editingId ? '/locations/' + editingId : '/locations', {
+        const res = await authFetch(editingId ? '/locations/' + editingId : '/locations', {
           method: editingId ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-token': adminToken,
           },
           body: JSON.stringify(payload),
         });
@@ -738,32 +869,11 @@
       locationStatus.textContent = msg || '';
     }
 
-    function getLocationAdminToken() {
-      if (adminToken) return adminToken;
-      const explicit = locationTokenInput.value.trim();
-      if (explicit) {
-        setAdminToken(explicit);
-        return explicit;
-      }
-      return '';
-    }
-
-    function buildAdminHeaders() {
-      const token = getLocationAdminToken();
-      if (!token) return null;
-      return { 'x-admin-token': token };
-    }
-
     async function loadApiClients() {
       if (!apiClientsStatus) return;
-      const headers = buildAdminHeaders();
-      if (!headers) {
-        apiClientsStatus.textContent = 'Admin token is required for API key management';
-        return;
-      }
       apiClientsStatus.textContent = 'Loading API clients...';
       try {
-        const res = await fetch('/admin/api-clients', { headers });
+        const res = await authFetch('/admin/api-clients');
         if (!res.ok) throw new Error('Failed to load API clients');
         const data = await res.json();
         renderApiClients(data || []);
@@ -822,11 +932,6 @@
     async function submitApiClient(event) {
       event.preventDefault();
       if (!apiClientsStatus) return;
-      const headers = buildAdminHeaders();
-      if (!headers) {
-        apiClientsStatus.textContent = 'Admin token is required for API key management';
-        return;
-      }
       const nameInput = document.getElementById('apiClientName');
       const emailInput = document.getElementById('apiClientEmail');
       const planInput = document.getElementById('apiClientPlan');
@@ -865,12 +970,11 @@
       apiClientResult.textContent = '';
       apiClientsStatus.textContent = isEditing ? 'Saving client...' : 'Creating API key...';
       try {
-        headers['Content-Type'] = 'application/json';
         const endpoint = isEditing ? `/admin/api-clients/${editingId}` : '/admin/api-clients';
         const method = isEditing ? 'PUT' : 'POST';
-        const res = await fetch(endpoint, {
+        const res = await authFetch(endpoint, {
           method,
-          headers,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
@@ -897,16 +1001,10 @@
 
     async function toggleApiClient(clientId) {
       if (!clientId || !apiClientsStatus) return;
-      const headers = buildAdminHeaders();
-      if (!headers) {
-        apiClientsStatus.textContent = 'Admin token is required for API key management';
-        return;
-      }
       apiClientsStatus.textContent = 'Updating client...';
       try {
-        const res = await fetch(`/admin/api-clients/${clientId}/toggle`, {
+        const res = await authFetch(`/admin/api-clients/${clientId}/toggle`, {
           method: 'POST',
-          headers,
         });
         if (!res.ok) {
           const text = await res.text();
@@ -929,16 +1027,10 @@
       if (!confirm(`Delete API client "${client.name || client._id}"? This cannot be undone.`)) {
         return;
       }
-      const headers = buildAdminHeaders();
-      if (!headers) {
-        apiClientsStatus.textContent = 'Admin token is required for API key management';
-        return;
-      }
       apiClientsStatus.textContent = 'Deleting client...';
       try {
-        const res = await fetch(`/admin/api-clients/${client._id}`, {
+        const res = await authFetch(`/admin/api-clients/${client._id}`, {
           method: 'DELETE',
-          headers,
         });
         if (!res.ok) {
           const text = await res.text();
@@ -1046,9 +1138,7 @@
         return;
       }
       try {
-        const token = getLocationAdminToken();
-        const headers = token ? { 'x-admin-token': token } : {};
-        const res = await fetch(`/locations/lookup?lat=${lat}&lon=${lon}`, { headers });
+        const res = await authFetch(`/locations/lookup?lat=${lat}&lon=${lon}`);
         if (!res.ok) throw new Error('Lookup failed');
         const data = await res.json();
         derivedCountryEl.textContent = data.country || 'Unknown';
@@ -1061,16 +1151,15 @@
 
     async function loadHourlyLocationsDropdown() {
       try {
-        const headers = buildAdminHeaders();
-        if (!headers) {
-          hourlyStatus.textContent = 'Admin token is required to load locations';
-          dailyStatus.textContent = 'Admin token is required to load locations';
-          return;
-        }
-        const res = await fetch('/locations?limit=200', { headers });
+        const res = await authFetch('/locations?limit=200');
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
-        const sorted = (data || []).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+        const filtered = (data || []).filter((loc) => {
+          if (sessionLocationAccess === 'resort-only') return Boolean(loc.isSkiResort);
+          if (sessionLocationAccess === 'non-resort-only') return !loc.isSkiResort;
+          return true;
+        });
+        const sorted = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
         populateLocationSelect(hourlySelect, sorted);
         populateLocationSelect(dailySelect, sorted);
       } catch (err) {
@@ -1097,20 +1186,188 @@
       });
     }
 
+    async function loadAdminUsers() {
+      if (!adminUsersStatus) return;
+      adminUsersStatus.textContent = 'Loading admins...';
+      try {
+        const res = await authFetch('/admin/users');
+        if (!res.ok) throw new Error('Failed to load admins');
+        const data = await res.json();
+        renderAdminUsers(data || []);
+        adminUsersStatus.textContent = `Loaded ${data?.length || 0} admins`;
+      } catch (err) {
+        adminUsersStatus.textContent = err.message;
+        showToast(err.message, true);
+      }
+    }
+
+    function renderAdminUsers(users) {
+      if (!adminUsersBody) return;
+      adminUsersBody.innerHTML = '';
+      (users || []).forEach((user) => {
+        const isOwner = Array.isArray(user.roles) && user.roles.includes('owner');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${user.email || ''}</td>
+          <td>${user.name || ''}</td>
+          <td>${Array.isArray(user.roles) ? user.roles.join(', ') : ''}</td>
+          <td>${user.locationAccess || 'all'}</td>
+          <td>${user.status || ''}</td>
+          <td>${formatDateTimeLocal(user.lastLoginAt)}</td>
+          <td>${formatDateTimeLocal(user.createdAt)}</td>
+          <td>
+            <button type="button" class="admin-edit-btn" data-id="${user._id}" ${isOwner ? 'disabled' : ''}>Edit</button>
+            <button type="button" class="admin-toggle-btn" data-id="${user._id}" data-status="${user.status}" ${isOwner ? 'disabled' : ''}>
+              ${user.status === 'active' ? 'Suspend' : 'Activate'}
+            </button>
+            <button type="button" class="admin-delete-btn" data-id="${user._id}" ${isOwner ? 'disabled' : ''}>Delete</button>
+          </td>
+        `;
+        const editBtn = tr.querySelector('.admin-edit-btn');
+        if (editBtn && !isOwner) {
+          editBtn.addEventListener('click', () => startEditAdmin(user));
+        }
+        const toggleBtn = tr.querySelector('.admin-toggle-btn');
+        if (toggleBtn && !isOwner) {
+          toggleBtn.addEventListener('click', () => toggleAdminStatus(user));
+        }
+        const deleteBtn = tr.querySelector('.admin-delete-btn');
+        if (deleteBtn && !isOwner) {
+          deleteBtn.addEventListener('click', () => deleteAdmin(user));
+        }
+        adminUsersBody.appendChild(tr);
+      });
+      if (adminUsersTable) {
+        adminUsersTable.style.display = users?.length ? 'table' : 'none';
+      }
+    }
+
+    async function submitAdminUser(event) {
+      event.preventDefault();
+      if (!adminUsersStatus) return;
+      const editingId = adminUserId?.value;
+      const email = adminUserEmail?.value.trim();
+      const name = adminUserName?.value.trim();
+      const roles = adminUserRoleSelect ? [adminUserRoleSelect.value] : ['admin'];
+      const status = adminUserStatusSelect ? adminUserStatusSelect.value : 'active';
+      const locationAccess = adminUserLocationAccess ? adminUserLocationAccess.value : 'all';
+      if (!email) {
+        adminUsersStatus.textContent = 'Email is required';
+        return;
+      }
+      adminUsersStatus.textContent = editingId ? 'Saving admin...' : 'Creating admin...';
+      try {
+        const endpoint = editingId ? `/admin/users/${editingId}` : '/admin/users';
+        const method = editingId ? 'PUT' : 'POST';
+        const payload = editingId ? { name, roles, status, locationAccess } : { email, name, roles, locationAccess };
+        const res = await authFetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to save admin');
+        }
+        adminUsersStatus.textContent = editingId ? 'Admin updated' : 'Admin created';
+        showToast(editingId ? 'Admin updated' : 'Admin created');
+        resetAdminUserForm();
+        loadAdminUsers();
+      } catch (err) {
+        adminUsersStatus.textContent = err.message;
+        showToast(err.message, true);
+      }
+    }
+
+    async function toggleAdminStatus(user) {
+      if (!user || !user._id) return;
+      if (!confirm(`Set ${user.email} to ${user.status === 'active' ? 'suspended' : 'active'}?`)) return;
+      adminUsersStatus.textContent = 'Updating admin...';
+      try {
+        const res = await authFetch(`/admin/users/${user._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: user.status === 'active' ? 'suspended' : 'active' }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to update admin');
+        }
+        adminUsersStatus.textContent = 'Admin updated';
+        showToast('Admin updated');
+        loadAdminUsers();
+      } catch (err) {
+        adminUsersStatus.textContent = err.message;
+        showToast(err.message, true);
+      }
+    }
+
+    function startEditAdmin(user) {
+      if (!user) return;
+      if (adminUserId) adminUserId.value = user._id;
+      if (adminUserEmail) {
+        adminUserEmail.value = user.email || '';
+        adminUserEmail.disabled = true;
+      }
+      if (adminUserName) adminUserName.value = user.name || '';
+      if (adminUserRoleSelect && Array.isArray(user.roles) && user.roles.length) {
+        adminUserRoleSelect.value = user.roles[0];
+      }
+      if (adminUserStatusSelect) {
+        adminUserStatusSelect.value = user.status || 'active';
+      }
+      if (adminUserLocationAccess) {
+        adminUserLocationAccess.value = user.locationAccess || 'all';
+      }
+      if (adminUserSubmitBtn) adminUserSubmitBtn.textContent = 'Save User';
+      if (adminUserCancelBtn) adminUserCancelBtn.style.display = 'inline-block';
+      adminUsersStatus.textContent = `Editing ${user.email || ''}`;
+    }
+
+    function resetAdminUserForm() {
+      if (adminUserForm) adminUserForm.reset();
+      if (adminUserId) adminUserId.value = '';
+      if (adminUserEmail) adminUserEmail.disabled = false;
+      if (adminUserRoleSelect) adminUserRoleSelect.value = 'admin';
+      if (adminUserStatusSelect) adminUserStatusSelect.value = 'active';
+      if (adminUserLocationAccess) adminUserLocationAccess.value = 'all';
+      if (adminUserSubmitBtn) adminUserSubmitBtn.textContent = 'Save User';
+      if (adminUserCancelBtn) adminUserCancelBtn.style.display = 'none';
+      adminUsersStatus.textContent = '';
+    }
+
+    async function deleteAdmin(user) {
+      if (!user || !user._id) return;
+      if (!confirm(`Delete admin ${user.email}? This cannot be undone.`)) return;
+      adminUsersStatus.textContent = 'Deleting admin...';
+      try {
+        const res = await authFetch(`/admin/users/${user._id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to delete admin');
+        }
+        adminUsersStatus.textContent = 'Admin deleted';
+        showToast('Admin deleted');
+        resetAdminUserForm();
+        loadAdminUsers();
+      } catch (err) {
+        adminUsersStatus.textContent = err.message;
+        showToast(err.message, true);
+      }
+    }
+
     function setDefaultHourlyDates() {
       const now = new Date();
-      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      hourlyStartInput.value = formatDateInput(start);
-      hourlyEndInput.value = formatDateInput(end);
+      hourlyStartInput.value = formatDateInput(now);
+      hourlyEndInput.value = formatDateInput(now);
     }
 
     function setDefaultDailyDates() {
       const now = new Date();
-      const start = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-      const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      dailyStartInput.value = formatDateInput(start);
-      dailyEndInput.value = formatDateInput(end);
+      dailyStartInput.value = formatDateInput(now);
+      dailyEndInput.value = formatDateInput(now);
     }
 
     function formatDateInput(date) {
@@ -1139,10 +1396,7 @@
       if (range.endEpoch != null) params.set('endDateEpoch', range.endEpoch);
       hourlyStatus.textContent = 'Loading hourly data...';
       try {
-        const headers = {};
-        const token = hourlyTokenInput.value.trim() || adminToken;
-        if (token) headers['x-admin-token'] = token;
-        const res = await fetch('/weather/hourly?' + params.toString(), { headers });
+        const res = await authFetch('/weather/hourly?' + params.toString());
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || 'Failed to load hourly data');
@@ -1191,10 +1445,7 @@
       const endpoint = mode === 'segments' ? '/weather/daily/segments' : '/weather/daily/overview';
       dailyStatus.textContent = 'Loading daily data...';
       try {
-        const headers = {};
-        const token = dailyTokenInput.value.trim() || adminToken;
-        if (token) headers['x-admin-token'] = token;
-        const res = await fetch(endpoint + '?' + params.toString(), { headers });
+        const res = await authFetch(endpoint + '?' + params.toString());
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || 'Failed to load daily data');
@@ -1244,6 +1495,21 @@
         <td>${source.hours ?? ''}</td>
       `;
       dailyTableBody.appendChild(tr);
+    }
+
+    async function authFetch(url, options = {}) {
+      const merged = Object.assign({}, options, { credentials: 'include' });
+      const res = await fetch(url, merged);
+      if (res.status === 401 || res.status === 403) {
+        handleUnauthorized();
+        throw new Error('Unauthorized');
+      }
+      return res;
+    }
+
+    function handleUnauthorized() {
+      showLogin();
+      authStatus.textContent = 'Session expired. Request a new link.';
     }
 
     function showToast(message, isError = false) {
@@ -1390,6 +1656,8 @@
       const tz = timeZone || getSelectedLocationTimezone(hourlySelect) || DEFAULT_TIME_ZONE;
       return DateTime.fromMillis(epoch, { zone: tz }).toFormat('yyyy-LL-dd HH:mm');
     }
+
+    bootstrap();
   </script>
 </body>
 </html>

@@ -4,6 +4,8 @@ const appConfigDb = require('../models/appConfigDb');
 
 const rateLimitDefault = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
 const dailyQuotaDefault = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
+const adminRateLimitMaxDefault = Number(process.env.ADMIN_RATE_LIMIT_MAX);
+const adminRateLimitWindowDefault = Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS);
 
 const defaults = {
   MS_PER_DAY: 24 * 60 * 60 * 1000,
@@ -23,6 +25,8 @@ const defaults = {
   LOCATION_RADIUS_MI: 5,
   CLIENT_RATE_LIMIT_DEFAULT: Number.isFinite(rateLimitDefault) ? rateLimitDefault : 60,
   CLIENT_DAILY_QUOTA_DEFAULT: Number.isFinite(dailyQuotaDefault) ? dailyQuotaDefault : 5000,
+  ADMIN_RATE_LIMIT_MAX: Number.isFinite(adminRateLimitMaxDefault) ? adminRateLimitMaxDefault : 60,
+  ADMIN_RATE_LIMIT_WINDOW_MS: Number.isFinite(adminRateLimitWindowDefault) ? adminRateLimitWindowDefault : 60 * 1000,
 };
 
 const DEFAULT_CONFIG = {
@@ -89,6 +93,14 @@ const DEFAULT_CONFIG = {
   CLIENT_DAILY_QUOTA_DEFAULT: {
     value: defaults.CLIENT_DAILY_QUOTA_DEFAULT,
     description: 'Default daily request quota for new API clients (set <=0 for unlimited).'
+  },
+  ADMIN_RATE_LIMIT_MAX: {
+    value: defaults.ADMIN_RATE_LIMIT_MAX,
+    description: 'Max admin requests per window (0 or negative = unlimited).'
+  },
+  ADMIN_RATE_LIMIT_WINDOW_MS: {
+    value: defaults.ADMIN_RATE_LIMIT_WINDOW_MS,
+    description: 'Admin rate limit window in milliseconds.'
   },
 };
 
@@ -171,6 +183,8 @@ function buildValuesFromCache() {
     LOCATION_RADIUS_MI: readValue('LOCATION_RADIUS_MI', defaults.LOCATION_RADIUS_MI),
     CLIENT_RATE_LIMIT_DEFAULT: readValue('CLIENT_RATE_LIMIT_DEFAULT', defaults.CLIENT_RATE_LIMIT_DEFAULT),
     CLIENT_DAILY_QUOTA_DEFAULT: readValue('CLIENT_DAILY_QUOTA_DEFAULT', defaults.CLIENT_DAILY_QUOTA_DEFAULT),
+    ADMIN_RATE_LIMIT_MAX: readValue('ADMIN_RATE_LIMIT_MAX', defaults.ADMIN_RATE_LIMIT_MAX),
+    ADMIN_RATE_LIMIT_WINDOW_MS: readValue('ADMIN_RATE_LIMIT_WINDOW_MS', defaults.ADMIN_RATE_LIMIT_WINDOW_MS),
   };
 }
 

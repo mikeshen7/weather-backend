@@ -4,6 +4,8 @@ require('dotenv').config();                      // *** allows use of .env file
 const express = require('express');              // *** Backend server
 const cors = require('cors');                    // *** Middleware 
 const mongoose = require('mongoose');            // *** Database
+const path = require('path');                    // *** Paths
+const cookieParser = require('cookie-parser');   // *** Cookies
 const weatherApi = require('./modules/weatherApi');
 const appMaintenance = require('./modules/appMaintenance');
 const locations = require('./modules/locations');
@@ -11,10 +13,23 @@ const weatherHourly = require('./modules/weatherHourly');
 const weatherDaily = require('./modules/weatherDaily');
 const appConfig = require('./modules/appConfig');
 const adminConfig = require('./modules/adminConfig');
-const { requireAdminToken } = require('./modules/auth');
+const {
+  requireAdminSession,
+  requireRole,
+  handleRequestMagicLink,
+  handleVerifyMagicLink,
+  handleSessionStatus,
+  handleLogout,
+  OWNER_ROLE,
+  ADMIN_ROLE,
+  READONLY_ROLE,
+} = require('./modules/adminAuth');
 const { requireClientApiKey } = require('./modules/clientAuth');
 const { trackUsage } = require('./modules/usageTracker');
 const adminApiClients = require('./modules/adminApiClients');
+const adminUsers = require('./modules/adminUsers');
+const { createFixedWindowRateLimiter } = require('./modules/rateLimit');
+const ADMIN_ENABLED = process.env.ADMIN_ENABLED === 'true';
 
 // *** Database connection and test
 const databaseName = process.env.DB_NAME || 'weather';
@@ -31,18 +46,25 @@ mongoose.set('strictQuery', false);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
+
+// *** Admin UI gate
+app.get('/admin.html', (request, response, next) => {
+  if (!ADMIN_ENABLED) {
+    return response.status(404).send('Not available');
+  }
+  return response.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 app.use(express.static('public'));
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`server listening on ${PORT}`));
 
 // *** Location Endpoints
-app.post('/locations', requireAdminToken, (request, response, next) => locations.endpointCreateLocation(request, response, next));
 app.use(['/locations', '/weather'], requireClientApiKey, trackUsage);
 app.get('/locations', (request, response, next) => locations.endpointSearchLocations(request, response, next));
 app.get('/locations/nearest', (request, response, next) => locations.endpointNearestLocation(request, response, next));
 app.get('/locations/lookup', (request, response, next) => locations.endpointLookupLocationMetadata(request, response, next));
-app.delete('/locations/:id', requireAdminToken, (request, response, next) => locations.endpointDeleteLocation(request, response, next));
-app.put('/locations/:id', requireAdminToken, (request, response, next) => locations.endpointUpdateLocation(request, response, next));
 
 // *** Weather Endpoints
 app.get('/weather/hourly', (request, response, next) => weatherHourly.endpointHourlyWeather(request, response, next));
@@ -52,14 +74,39 @@ app.get('/weather/daily/overview/by-coords', (request, response, next) => weathe
 app.get('/weather/daily/segments', (request, response, next) => weatherDaily.endpointDailySegments(request, response, next));
 app.get('/weather/daily/segments/by-coords', (request, response, next) => weatherDaily.endpointDailySegmentsByCoords(request, response, next));
 
-// *** Admin Config Endpoints
-app.get('/admin/config', requireAdminToken, (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
-app.put('/admin/config/:key', requireAdminToken, (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
-app.get('/admin/api-clients', requireAdminToken, (req, res, next) => adminApiClients.endpointListClients(req, res, next));
-app.post('/admin/api-clients', requireAdminToken, (req, res, next) => adminApiClients.endpointCreateClient(req, res, next));
-app.put('/admin/api-clients/:id', requireAdminToken, (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
-app.post('/admin/api-clients/:id/toggle', requireAdminToken, (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
-app.delete('/admin/api-clients/:id', requireAdminToken, (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
+// *** Admin-only Endpoints
+if (ADMIN_ENABLED) {
+  const adminRateLimit = createFixedWindowRateLimiter({
+    max: () => appConfig.values().ADMIN_RATE_LIMIT_MAX,
+    windowMs: () => appConfig.values().ADMIN_RATE_LIMIT_WINDOW_MS,
+  });
+
+  app.use('/admin', adminRateLimit);
+
+  app.post('/locations', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointCreateLocation(request, response, next));
+  app.delete('/locations/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointDeleteLocation(request, response, next));
+  app.put('/locations/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointUpdateLocation(request, response, next));
+
+  app.post('/admin/auth/request-link', (req, res, next) => handleRequestMagicLink(req, res, next));
+  app.get('/admin/auth/verify', (req, res, next) => handleVerifyMagicLink(req, res, next));
+  app.get('/admin/auth/session', (req, res, next) => handleSessionStatus(req, res, next));
+  app.post('/admin/auth/logout', (req, res, next) => handleLogout(req, res, next));
+
+  app.get('/admin/config', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
+  app.put('/admin/config/:key', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
+  app.get('/admin/api-clients', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointListClients(req, res, next));
+  app.post('/admin/api-clients', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointCreateClient(req, res, next));
+  app.put('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
+  app.post('/admin/api-clients/:id/toggle', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
+  app.delete('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
+
+  app.get('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.listUsers(req, res, next));
+  app.post('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.createUser(req, res, next));
+  app.put('/admin/users/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.updateUser(req, res, next));
+  app.delete('/admin/users/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.deleteUser(req, res, next));
+} else {
+  console.log('Admin endpoints disabled; set ADMIN_ENABLED=true to enable admin routes and UI.');
+}
 
 // *** Misc ENDPOINTS
 app.get('/', (request, response) => response.status(200).send('Welcome'));

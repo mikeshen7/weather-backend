@@ -8,6 +8,8 @@ Express + MongoDB backend for weather by location (resorts, ZIP centroids, any c
 
 (Open-Meteo needs no API key.)
 
+Admin is disabled by default; to use admin routes/UI locally set `ADMIN_ENABLED=true` and configure magic-link auth + SMTP (see Admin section).
+
 2) Install deps:
 npm install
 
@@ -19,11 +21,25 @@ npm install
 ### API access & rate limiting
 
 - Every client must include an API key in the `x-api-key` header (configurable via `CLIENT_API_KEY_HEADER`).
-- Admin-only endpoints under `/admin/api-clients` let you list clients, mint new keys (the raw key is returned once), and toggle active/revoked status.
-- The Admin UI (`/admin.html`) now includes an “API Keys” tab for issuing keys, viewing usage stats (including today’s call count), editing rate limits, copying the current key, revoking/reactivating clients, and deleting keys without touching curl.
+- Admin-only endpoints under `/admin/api-clients` let you list clients, mint new keys (the raw key is returned once), and toggle active/revoked status. They only mount when `ADMIN_ENABLED=true` and you’re signed in via an admin session.
+- The Admin UI (`/admin.html`) is served only when `ADMIN_ENABLED=true`; it includes an “API Keys” tab for issuing keys, viewing usage stats (including today’s call count), editing rate limits, copying the current key, revoking/reactivating clients, and deleting keys without touching curl. Admin auth uses email-based magic links and sets a short-lived HttpOnly session cookie (no tokens in localStorage).
 - Default per-minute and daily quotas for new API clients are editable in the Config tab via `CLIENT_RATE_LIMIT_DEFAULT` and `CLIENT_DAILY_QUOTA_DEFAULT`, so you can raise/lower plan defaults without touching env vars.
 - Requests are rate limited with a token bucket backed by Mongo (`CLIENT_API_RATE_WINDOW_MIN`, `CLIENT_API_RATE_LIMIT_DEFAULT`, `CLIENT_API_DAILY_QUOTA_DEFAULT` control defaults). per-client overrides live on the client document.
 - Usage stats (`totalUsage`, `lastUsedAt`) are updated on each request. Counters reset automatically as the TTL’d usage windows expire.
+- Admin Users tab lets you list admins, create new ones (email/name/roles), and suspend/reactivate accounts.
+
+### Admin auth (magic links)
+
+- Set `ADMIN_ENABLED=true` plus:
+  - `ADMIN_MAGIC_LINK_BASE_URL` (e.g. `http://localhost:3001` for dev),
+  - `ADMIN_SESSION_SECRET` (strong random string),
+  - `ADMIN_SESSION_TTL_MINUTES` and `ADMIN_MAGIC_TOKEN_TTL_MINUTES` for session/link lifetimes,
+  - `ADMIN_COOKIE_SECURE` (`false` for local HTTP, `true` for HTTPS),
+  - `ADMIN_BOOTSTRAP_EMAIL` to allow creating the first admin when they request a link.
+- SMTP (Gmail example): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=<gmail address>`, `SMTP_PASS=<app password>`, `SMTP_FROM=<from address>`. Gmail requires an App Password.
+- Flow: enter admin email on `/admin.html` → backend emails a one-time link → clicking it sets an HttpOnly admin session cookie and redirects back. Logout clears the cookie. Admin requests rely on the session, not bearer tokens.
+- Roles: bootstrap email gets `owner` + `admin`; new users can be `admin` (full) or `read-only`. Read-only users can view Locations/Hourly/Daily but cannot modify locations or access API Keys/Config/Admins tabs.
+- Admin rate limit is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX`, `ADMIN_RATE_LIMIT_WINDOW_MS` keys).
 
 ## Endpoints (key ones)
 
@@ -54,8 +70,8 @@ npm install
   - `GET /weather/daily/segments/by-coords?lat=39.6&lon=-106.4&daysForward=10` returns the same daypart data after resolving a location from coordinates
   - `startSchedule` fetches hourly weather for all locations; endpoints query Mongo-backed data.
 - Admin:
-  - `GET /admin/config` lists config entries, `PUT /admin/config/:key` updates a value (requires `x-admin-token`)
-  - Minimal UI served at `/admin.html` to view/edit config values (radius now uses miles)
+  - `GET /admin/config` lists config entries, `PUT /admin/config/:key` updates a value (requires admin session cookie)
+  - Minimal UI served at `/admin.html` to view/edit config values (radius now uses miles); admin auth is magic-link based
 
 - Health:
   - `GET /health`

@@ -34,7 +34,7 @@ async function endpointUpdateConfig(request, response, next) {
       event: 'config_updated',
       key,
       value,
-      user: request.headers['x-admin-token'] ? 'token-user' : 'unknown',
+      user: request.adminUser ? request.adminUser.email : 'unknown',
     }));
     return response.status(200).send(updated);
   } catch (error) {
