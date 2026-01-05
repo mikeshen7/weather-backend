@@ -78,7 +78,7 @@ app.get('/weather/daily/segments/by-coords', (request, response, next) => weathe
 if (ADMIN_ENABLED) {
   const adminRateLimit = createFixedWindowRateLimiter({
     max: () => appConfig.values().ADMIN_RATE_LIMIT_MAX,
-    windowMs: () => appConfig.values().ADMIN_RATE_LIMIT_WINDOW_MS,
+    windowMs: 60_000,
   });
 
   app.use('/admin', adminRateLimit);

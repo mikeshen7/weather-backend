@@ -5,7 +5,6 @@ const appConfigDb = require('../models/appConfigDb');
 const rateLimitDefault = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
 const dailyQuotaDefault = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
 const adminRateLimitMaxDefault = Number(process.env.ADMIN_RATE_LIMIT_MAX);
-const adminRateLimitWindowDefault = Number(process.env.ADMIN_RATE_LIMIT_WINDOW_MS);
 const adminSessionTtlDefault = Number(process.env.ADMIN_SESSION_TTL_MINUTES);
 const adminMagicTtlDefault = Number(process.env.ADMIN_MAGIC_TOKEN_TTL_MINUTES);
 
@@ -28,7 +27,6 @@ const defaults = {
   CLIENT_RATE_LIMIT_DEFAULT: Number.isFinite(rateLimitDefault) ? rateLimitDefault : 60,
   CLIENT_DAILY_QUOTA_DEFAULT: Number.isFinite(dailyQuotaDefault) ? dailyQuotaDefault : 5000,
   ADMIN_RATE_LIMIT_MAX: Number.isFinite(adminRateLimitMaxDefault) ? adminRateLimitMaxDefault : 60,
-  ADMIN_RATE_LIMIT_WINDOW_MS: Number.isFinite(adminRateLimitWindowDefault) ? adminRateLimitWindowDefault : 60 * 1000,
   ADMIN_SESSION_TTL_MINUTES: Number.isFinite(adminSessionTtlDefault) ? adminSessionTtlDefault : 60,
   ADMIN_MAGIC_TOKEN_TTL_MINUTES: Number.isFinite(adminMagicTtlDefault) ? adminMagicTtlDefault : 15,
 };
@@ -100,11 +98,7 @@ const DEFAULT_CONFIG = {
   },
   ADMIN_RATE_LIMIT_MAX: {
     value: defaults.ADMIN_RATE_LIMIT_MAX,
-    description: 'Max admin requests per window (0 or negative = unlimited).'
-  },
-  ADMIN_RATE_LIMIT_WINDOW_MS: {
-    value: defaults.ADMIN_RATE_LIMIT_WINDOW_MS,
-    description: 'Admin rate limit window in milliseconds.'
+    description: 'Max admin requests per minute (0 or negative = unlimited).'
   },
   ADMIN_SESSION_TTL_MINUTES: {
     value: defaults.ADMIN_SESSION_TTL_MINUTES,
@@ -196,7 +190,6 @@ function buildValuesFromCache() {
     CLIENT_RATE_LIMIT_DEFAULT: readValue('CLIENT_RATE_LIMIT_DEFAULT', defaults.CLIENT_RATE_LIMIT_DEFAULT),
     CLIENT_DAILY_QUOTA_DEFAULT: readValue('CLIENT_DAILY_QUOTA_DEFAULT', defaults.CLIENT_DAILY_QUOTA_DEFAULT),
     ADMIN_RATE_LIMIT_MAX: readValue('ADMIN_RATE_LIMIT_MAX', defaults.ADMIN_RATE_LIMIT_MAX),
-    ADMIN_RATE_LIMIT_WINDOW_MS: readValue('ADMIN_RATE_LIMIT_WINDOW_MS', defaults.ADMIN_RATE_LIMIT_WINDOW_MS),
     ADMIN_SESSION_TTL_MINUTES: readValue('ADMIN_SESSION_TTL_MINUTES', defaults.ADMIN_SESSION_TTL_MINUTES),
     ADMIN_MAGIC_TOKEN_TTL_MINUTES: readValue('ADMIN_MAGIC_TOKEN_TTL_MINUTES', defaults.ADMIN_MAGIC_TOKEN_TTL_MINUTES),
   };

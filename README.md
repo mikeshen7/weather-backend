@@ -38,7 +38,7 @@ npm install
 - SMTP (Gmail example): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=<gmail address>`, `SMTP_PASS=<app password>`, `SMTP_FROM=<from address>`. Gmail requires an App Password.
 - Flow: enter admin email on `/admin.html` → backend emails a one-time link → clicking it sets an HttpOnly admin session cookie and redirects back. Logout clears the cookie. Admin requests rely on the session, not bearer tokens.
 - Roles: bootstrap email gets `owner` + `admin`; new users can be `admin` (full) or `read-only`. Read-only users can view Locations/Hourly/Daily but cannot modify locations or access API Keys/Config/Admins tabs.
-- Admin rate limit is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX`, `ADMIN_RATE_LIMIT_WINDOW_MS` keys).
+- Admin rate limit (requests per minute) is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX` key).
   - Session/magic token lifetimes are configurable via Config UI (`ADMIN_SESSION_TTL_MINUTES`, `ADMIN_MAGIC_TOKEN_TTL_MINUTES`).
 
 ## Endpoints (key ones)
