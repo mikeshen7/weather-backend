@@ -271,9 +271,8 @@
             <th>Rate/Min Limit</th>
             <th>Daily Limit</th>
             <th>Plan</th>
-            <th>Role</th>
-            <th>Location Access</th>
             <th>Status</th>
+            <th>Anomaly</th>
             <th>Last Used</th>
             <th>Created</th>
             <th></th>
@@ -923,6 +922,8 @@
       (clients || []).forEach((client) => {
         const toggleLabel = client.status === 'active' ? 'Revoke' : 'Activate';
         const tr = document.createElement('tr');
+        const anomalyText = client.accessAnomaly ? 'Yes' : 'No';
+        const anomalyDetail = client.lastAccessAlertAt ? `<div style="font-size:0.85rem;color:#555;">${formatDateTimeLocal(client.lastAccessAlertAt)}</div>` : '';
         tr.innerHTML = `
           <td>${client.name || ''}</td>
           <td>${client.contactEmail || ''}</td>
@@ -932,6 +933,7 @@
           <td>${client.dailyQuota ?? ''}</td>
           <td>${client.plan || ''}</td>
           <td>${client.status || ''}</td>
+          <td>${anomalyText}${anomalyDetail}</td>
           <td>${formatDateTimeLocal(client.lastUsedAt)}</td>
           <td>${formatDateTimeLocal(client.createdAt)}</td>
           <td>

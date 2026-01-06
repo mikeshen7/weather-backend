@@ -14,6 +14,13 @@ const apiDailyUsageDb = require('../models/apiDailyUsageDb');
 
 async function endpointListClients(request, response, next) {
   try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const accessHostAgg = await clientAccessLogDb.aggregate([
+      { $match: { createdAt: { $gte: since }, host: { $exists: true } } },
+      { $group: { _id: '$client', hosts: { $addToSet: '$host' } } },
+    ]);
+    const hostMap = new Map(accessHostAgg.map((entry) => [String(entry._id), entry.hosts || []]));
+
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
@@ -39,9 +46,12 @@ async function endpointListClients(request, response, next) {
     const docs = await apiClientDb.find().sort({ createdAt: -1 }).lean();
     const withUsage = docs.map((doc) => {
       const { latestPlainApiKey, ...rest } = doc;
+      const hosts = hostMap.get(String(doc._id)) || [];
+      const accessAnomaly = hosts.filter(Boolean).length > 1;
       return {
         ...rest,
         currentDayUsage: usageMap.get(String(doc._id)) || 0,
+        accessAnomaly,
       };
     });
     return response.status(200).send(withUsage);
