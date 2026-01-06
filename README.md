@@ -36,6 +36,7 @@ npm install
   - `ADMIN_COOKIE_SECURE` (`false` for local HTTP, `true` for HTTPS),
   - `ADMIN_BOOTSTRAP_EMAIL` to allow creating the first admin when they request a link.
 - SMTP (Gmail example): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=<gmail address>`, `SMTP_PASS=<app password>`, `SMTP_FROM=<from address>`. Gmail requires an App Password.
+- Brevo HTTP API (SMTP-free): set `BREVO_API_KEY` and `SMTP_FROM`; the app will send magic links via Brevo’s API when the key is present.
 - Flow: enter admin email on `/admin.html` → backend emails a one-time link → clicking it sets an HttpOnly admin session cookie and redirects back. Logout clears the cookie. Admin requests rely on the session, not bearer tokens.
 - Roles: bootstrap email gets `owner` + `admin`; new users can be `admin` (full) or `read-only`. Read-only users can view Locations/Hourly/Daily but cannot modify locations or access API Keys/Config/Admins tabs.
 - Admin rate limit (requests per minute) is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX` key).

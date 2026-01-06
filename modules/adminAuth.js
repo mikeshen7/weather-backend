@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 const adminUserDb = require('../models/adminUserDb');
 const adminMagicTokenDb = require('../models/adminMagicTokenDb');
 const appConfig = require('./appConfig');
@@ -61,9 +62,9 @@ function getTransporter() {
 }
 
 async function sendMagicLinkEmail(email, link) {
-  const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const expiresMinutes = Number(appConfig.values().ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
+  const subject = 'Weather Forecast backend admin login link';
   const text = [
     'Your admin login link:',
     link,
@@ -71,11 +72,38 @@ async function sendMagicLinkEmail(email, link) {
     `This link expires in ${expiresMinutes} minutes.`,
     'If you did not request it, you can ignore this email.',
   ].join('\n');
+
+  if (process.env.BREVO_API_KEY) {
+    await sendViaBrevo({ to: email, from, subject, text });
+    return;
+  }
+
+  const transporter = getTransporter();
   await transporter.sendMail({
     from,
     to: email,
-    subject: 'Weather Forecast backend admin login link',
+    subject,
     text,
+  });
+}
+
+async function sendViaBrevo({ to, from, subject, text }) {
+  if (!from) {
+    throw new Error('SMTP_FROM is required for Brevo sender');
+  }
+  const apiKey = process.env.BREVO_API_KEY;
+  const payload = {
+    sender: { email: from },
+    to: [{ email: to }],
+    subject,
+    textContent: text,
+  };
+  await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    timeout: 10000,
   });
 }
 
