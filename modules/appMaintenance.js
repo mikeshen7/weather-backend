@@ -13,6 +13,9 @@ function formatDate(date) {
 async function fetchAllWeather(options = {}) {
   const context = options.context || 'forecast';
   const requestOptions = { ...options, context };
+  if (!requestOptions.startDate && !requestOptions.endDate && requestOptions.forecastDays == null) {
+    requestOptions.forecastDays = 16; // pull max available forecast window
+  }
   let locations = getCachedLocations();
   if (!locations || locations.length === 0) {
     locations = await refreshLocationsCache();

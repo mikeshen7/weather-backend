@@ -19,6 +19,7 @@ const apiClientSchema = new Schema(
     lastUsedAt: { type: Date },
     latestPlainApiKey: { type: String, default: '' },
     metadata: { type: Schema.Types.Mixed },
+    lastAccessAlertAt: { type: Date },
   },
   {
     collection: collectionName,

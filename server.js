@@ -99,6 +99,7 @@ if (ADMIN_ENABLED) {
   app.put('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
   app.post('/admin/api-clients/:id/toggle', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
   app.delete('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
+  app.get('/admin/api-clients/:id/access', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointGetClientAccess(req, res, next));
 
   app.get('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.listUsers(req, res, next));
   app.post('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.createUser(req, res, next));

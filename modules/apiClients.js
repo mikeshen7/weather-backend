@@ -37,7 +37,7 @@ async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQu
     plan: plan ? String(plan).trim() : undefined,
     rateLimitPerMin: Number.isFinite(resolvedRateLimit) ? resolvedRateLimit : configValues.CLIENT_RATE_LIMIT_DEFAULT,
     dailyQuota: Number.isFinite(resolvedDailyQuota) ? resolvedDailyQuota : configValues.CLIENT_DAILY_QUOTA_DEFAULT,
-    latestPlainApiKey: rawKey,
+    latestPlainApiKey: '', // do not persist plaintext API key
     metadata,
   });
   return { client: doc.toObject(), apiKey: rawKey };
@@ -60,7 +60,7 @@ async function regenerateApiKey(clientId) {
   const keyHash = hashKey(rawKey);
   const doc = await apiClientDb.findByIdAndUpdate(
     clientId,
-    { keyHash, latestPlainApiKey: rawKey },
+    { keyHash, latestPlainApiKey: '' }, // do not persist plaintext API key
     { new: true }
   );
   return { client: doc, apiKey: rawKey };

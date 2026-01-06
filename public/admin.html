@@ -251,6 +251,15 @@
           <button type="button" id="apiClientsRefreshBtn">Refresh</button>
         </div>
       </form>
+      <div id="apiClientKeyPanel" class="card" style="margin-top:1rem; display:none; background:#fffbe6; border:1px solid #f0d97a;">
+        <strong>API key (copy now, shown once):</strong>
+        <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="apiClientKeyValue" readonly style="flex:1; min-width:240px; padding:0.4rem; border:1px solid #ccc; border-radius:4px;" />
+          <button type="button" id="apiClientCopyBtn">Copy</button>
+          <button type="button" id="apiClientHideKeyBtn">Hide</button>
+        </div>
+        <div style="margin-top:0.35rem; font-size:0.9rem; color:#666;">Store this key securely; it will not be shown again.</div>
+      </div>
       <div id="apiClientResult" class="status"></div>
       <table id="apiClientsTable" style="display:none;">
         <thead>
@@ -261,7 +270,6 @@
             <th>Total Usage</th>
             <th>Rate/Min Limit</th>
             <th>Daily Limit</th>
-            <th>API Key</th>
             <th>Plan</th>
             <th>Role</th>
             <th>Location Access</th>
@@ -274,6 +282,11 @@
         <tbody></tbody>
       </table>
       <div id="apiClientsStatus" class="status"></div>
+      <div id="apiClientAccessPanel" class="card" style="margin-top:1rem; display:none;">
+        <h3>Recent Access</h3>
+        <div id="apiClientAccessStatus" class="status"></div>
+        <ul id="apiClientAccessList"></ul>
+      </div>
     </div>
 
     <div id="configTab" class="tab-panel">
@@ -671,6 +684,13 @@
     const apiClientCancelBtn = document.getElementById('apiClientCancelBtn');
     const apiClientRateInput = document.getElementById('apiClientRateLimit');
     const apiClientDailyInput = document.getElementById('apiClientDailyQuota');
+    const apiClientKeyPanel = document.getElementById('apiClientKeyPanel');
+    const apiClientKeyValue = document.getElementById('apiClientKeyValue');
+    const apiClientCopyBtn = document.getElementById('apiClientCopyBtn');
+    const apiClientHideKeyBtn = document.getElementById('apiClientHideKeyBtn');
+    const apiClientAccessPanel = document.getElementById('apiClientAccessPanel');
+    const apiClientAccessStatus = document.getElementById('apiClientAccessStatus');
+    const apiClientAccessList = document.getElementById('apiClientAccessList');
     const adminUserForm = document.getElementById('adminUserForm');
     const adminUserId = document.getElementById('adminUserId');
     const adminUserEmail = document.getElementById('adminUserEmail');
@@ -722,6 +742,12 @@
     }
     if (apiClientCancelBtn) {
       apiClientCancelBtn.addEventListener('click', resetApiClientForm);
+    }
+    if (apiClientCopyBtn) {
+      apiClientCopyBtn.addEventListener('click', copyApiClientKey);
+    }
+    if (apiClientHideKeyBtn) {
+      apiClientHideKeyBtn.addEventListener('click', hideApiClientKeyPanel);
     }
     if (adminUserForm) {
       adminUserForm.addEventListener('submit', submitAdminUser);
@@ -896,7 +922,6 @@
       apiClientsBody.innerHTML = '';
       (clients || []).forEach((client) => {
         const toggleLabel = client.status === 'active' ? 'Revoke' : 'Activate';
-        const keyDisplay = client.latestPlainApiKey || 'Not stored';
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${client.name || ''}</td>
@@ -905,7 +930,6 @@
           <td>${client.totalUsage ?? 0}</td>
           <td>${client.rateLimitPerMin ?? ''}</td>
           <td>${client.dailyQuota ?? ''}</td>
-          <td><code>${keyDisplay}</code></td>
           <td>${client.plan || ''}</td>
           <td>${client.status || ''}</td>
           <td>${formatDateTimeLocal(client.lastUsedAt)}</td>
@@ -914,6 +938,7 @@
             <button type="button" class="api-edit-btn" data-id="${client._id}">Edit</button>
             <button type="button" class="api-toggle-btn" data-id="${client._id}">${toggleLabel}</button>
             <button type="button" class="api-delete-btn" data-id="${client._id}">Delete</button>
+            <button type="button" class="api-access-btn" data-id="${client._id}">Access</button>
           </td>
         `;
         const editBtn = tr.querySelector('.api-edit-btn');
@@ -927,6 +952,10 @@
         const deleteBtn = tr.querySelector('.api-delete-btn');
         if (deleteBtn) {
           deleteBtn.addEventListener('click', () => deleteApiClient(client));
+        }
+        const accessBtn = tr.querySelector('.api-access-btn');
+        if (accessBtn) {
+          accessBtn.addEventListener('click', () => loadApiClientAccess(client));
         }
         apiClientsBody.appendChild(tr);
       });
@@ -990,7 +1019,8 @@
         const data = await res.json();
         const apiKey = data?.apiKey;
         if (apiKey) {
-          apiClientResult.textContent = `API key (copy now): ${apiKey}`;
+          showApiClientKey(apiKey);
+          apiClientResult.textContent = 'API key created (copy now, shown once)';
         } else {
           apiClientResult.textContent = isEditing ? 'Client updated' : 'Client created';
         }
@@ -1052,6 +1082,61 @@
         setTimeout(() => {
           apiClientsStatus.textContent = '';
         }, 1500);
+      }
+    }
+
+    function showApiClientKey(key) {
+      if (!apiClientKeyPanel || !apiClientKeyValue) return;
+      apiClientKeyValue.value = key;
+      apiClientKeyPanel.style.display = 'block';
+    }
+
+    function hideApiClientKeyPanel() {
+      if (!apiClientKeyPanel || !apiClientKeyValue) return;
+      apiClientKeyValue.value = '';
+      apiClientKeyPanel.style.display = 'none';
+    }
+
+    async function copyApiClientKey() {
+      if (!apiClientKeyValue) return;
+      const key = apiClientKeyValue.value;
+      if (!key) return;
+      try {
+        await navigator.clipboard.writeText(key);
+        showToast('Copied API key');
+      } catch (err) {
+        showToast('Copy failed', true);
+      }
+    }
+
+    async function loadApiClientAccess(client) {
+      if (!client || !client._id || !apiClientAccessPanel || !apiClientAccessStatus || !apiClientAccessList) return;
+      apiClientAccessStatus.textContent = 'Loading access...';
+      apiClientAccessList.innerHTML = '';
+      apiClientAccessPanel.style.display = 'block';
+      try {
+        const res = await authFetch(`/admin/api-clients/${client._id}/access`);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to load access logs');
+        }
+        const data = await res.json();
+        const logs = data?.logs || [];
+        if (!logs.length) {
+          apiClientAccessStatus.textContent = 'No recent access records';
+          return;
+        }
+        const items = logs.map((log) => {
+          const ts = formatDateTimeLocal(log.createdAt);
+          const host = log.host || '-';
+          const ip = log.ip || '-';
+          const origin = log.origin || '-';
+          return `<li>${ts} — host: ${host} — ip: ${ip} — origin: ${origin}</li>`;
+        });
+        apiClientAccessList.innerHTML = items.join('');
+        apiClientAccessStatus.textContent = `Showing ${logs.length} recent access records`;
+      } catch (err) {
+        apiClientAccessStatus.textContent = err.message;
       }
     }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const apiClientDb = require('../models/apiClientDb');
+const clientAccessLogDb = require('../models/clientAccessLogDb');
 const {
   createClient,
   revokeClient,
@@ -36,10 +37,13 @@ async function endpointListClients(request, response, next) {
     }, new Map());
 
     const docs = await apiClientDb.find().sort({ createdAt: -1 }).lean();
-    const withUsage = docs.map((doc) => ({
-      ...doc,
-      currentDayUsage: usageMap.get(String(doc._id)) || 0,
-    }));
+    const withUsage = docs.map((doc) => {
+      const { latestPlainApiKey, ...rest } = doc;
+      return {
+        ...rest,
+        currentDayUsage: usageMap.get(String(doc._id)) || 0,
+      };
+    });
     return response.status(200).send(withUsage);
   } catch (error) {
     console.error('*** adminApiClients list error:', error.message);
@@ -144,10 +148,31 @@ function buildUpdatePayload(body) {
   return { fields, regenerateKey };
 }
 
+async function endpointGetClientAccess(request, response, next) {
+  try {
+    const { id } = request.params;
+    const client = await apiClientDb.findById(id).lean();
+    if (!client) {
+      return response.status(404).send('Client not found');
+    }
+    const logs = await clientAccessLogDb
+      .find({ client: id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    const distinctHosts = Array.from(new Set(logs.map((l) => l.host).filter(Boolean)));
+    return response.status(200).send({ distinctHosts, logs });
+  } catch (error) {
+    console.error('*** adminApiClients access error:', error.message);
+    return next(error);
+  }
+}
+
 module.exports = {
   endpointListClients,
   endpointCreateClient,
   endpointToggleClient,
   endpointUpdateClient,
   endpointDeleteClient,
+  endpointGetClientAccess,
 };
