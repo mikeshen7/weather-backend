@@ -170,12 +170,12 @@
         <thead>
           <tr>
             <th>Date/Time</th>
+            <th>Snow (in)</th>
             <th>Temp (°F)</th>
+            <th>Wind (mph)</th>
             <th>Feels Like</th>
             <th>Conditions</th>
             <th>Precip (in)</th>
-            <th>Snow (in)</th>
-            <th>Wind (km/h)</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -213,15 +213,14 @@
         <thead>
           <tr>
             <th>Date</th>
+            <th>Snow (in)</th>
             <th>High (°F)</th>
             <th>Low (°F)</th>
+            <th>Avg Wind (mph)</th>
             <th>Conditions</th>
             <th>Precip (in)</th>
-            <th>Snow (in)</th>
-            <th>Avg Wind (km/h)</th>
             <th>Precip %</th>
             <th>Cloud %</th>
-            <th>Hours</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -708,6 +707,13 @@
     setDefaultDailyDates();
     loadHourlyBtn.addEventListener('click', loadHourlyWeather);
     loadDailyBtn.addEventListener('click', loadDailyWeather);
+    if (dailySelect) dailySelect.addEventListener('change', loadDailyWeather);
+    if (dailyStartInput) dailyStartInput.addEventListener('change', loadDailyWeather);
+    if (dailyEndInput) dailyEndInput.addEventListener('change', loadDailyWeather);
+    if (dailyModeSelect) dailyModeSelect.addEventListener('change', loadDailyWeather);
+    if (hourlySelect) hourlySelect.addEventListener('change', loadHourlyWeather);
+    if (hourlyStartInput) hourlyStartInput.addEventListener('change', loadHourlyWeather);
+    if (hourlyEndInput) hourlyEndInput.addEventListener('change', loadHourlyWeather);
     if (apiClientForm) {
       apiClientForm.addEventListener('submit', submitApiClient);
     }
@@ -1367,7 +1373,8 @@
     function setDefaultDailyDates() {
       const now = new Date();
       dailyStartInput.value = formatDateInput(now);
-      dailyEndInput.value = formatDateInput(now);
+      const end = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
+      dailyEndInput.value = formatDateInput(end);
     }
 
     function formatDateInput(date) {
@@ -1417,12 +1424,12 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${formatLocationDateTime(row, tz)}</td>
-          <td>${row.temp ?? ''}</td>
-          <td>${row.feelsLike ?? ''}</td>
+          <td>${formatNumberValue(row.snow, 2)}</td>
+          <td>${formatNumberValue(row.temp, 1)}</td>
+          <td>${formatWindMph(row.windspeed)}</td>
+          <td>${formatNumberValue(row.feelsLike, 1)}</td>
           <td>${row.conditions || ''}</td>
-          <td>${row.precip ?? ''}</td>
-          <td>${row.snow ?? ''}</td>
-          <td>${row.windspeed ?? ''}</td>
+          <td>${formatNumberValue(row.precip, 2)}</td>
         `;
         hourlyTableBody.appendChild(tr);
       });
@@ -1468,12 +1475,13 @@
     function renderDailyTable(rows) {
       dailyTableBody.innerHTML = '';
       rows.forEach((row) => {
+        const dateLabel = formatDayLabel(row.date || row.day || '');
         if (Array.isArray(row.segments) && row.segments.length) {
           row.segments.forEach((segment) => {
-            appendDailyRow(segment, `${row.date || row.day || ''} (${segment.label})`);
+            appendDailyRow(segment, `${dateLabel} (${segment.label})`);
           });
         } else {
-          appendDailyRow(row, row.date || row.day || '');
+          appendDailyRow(row, dateLabel);
         }
       });
       dailyTable.style.display = dailyTableBody.children.length ? 'table' : 'none';
@@ -1484,17 +1492,23 @@
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${label}</td>
-        <td>${formatNumberValue(source.high ?? source.maxTemp, 0)}</td>
-        <td>${formatNumberValue(source.low ?? source.minTemp, 0)}</td>
+        <td>${formatNumberValue(source.snowTotal, 2)}</td>
+        <td>${formatNumberValue(source.high ?? source.maxTemp, 1)}</td>
+        <td>${formatNumberValue(source.low ?? source.minTemp, 1)}</td>
+        <td>${formatWindMph(source.avgWindspeed)}</td>
         <td>${conditions}</td>
         <td>${formatNumberValue(source.precipTotal, 2)}</td>
-        <td>${formatNumberValue(source.snowTotal, 2)}</td>
-        <td>${formatNumberValue(source.avgWindspeed)}</td>
         <td>${formatPercentValue(source.avgPrecipProb)}</td>
         <td>${formatPercentValue(source.avgCloudCover)}</td>
-        <td>${source.hours ?? ''}</td>
       `;
       dailyTableBody.appendChild(tr);
+    }
+
+    function formatDayLabel(dateStr) {
+      if (!dateStr) return '';
+      const dt = DateTime.fromISO(dateStr);
+      if (!dt.isValid) return dateStr;
+      return `${dt.toFormat('EEE')} ${dt.toFormat('yyyy-LL-dd')}`;
     }
 
     async function authFetch(url, options = {}) {
@@ -1638,6 +1652,12 @@
         return '';
       }
       return `${Number(value).toFixed(0)}%`;
+    }
+
+    function formatWindMph(value) {
+      if (value === undefined || value === null || Number.isNaN(Number(value))) return '';
+      const mph = Number(value) * 0.621371; // km/h to mph
+      return `${mph.toFixed(1)} mph`;
     }
 
     function formatDateTimeLocal(value) {
