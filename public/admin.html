@@ -79,15 +79,96 @@
       <button id="logoutBtn" class="hidden">Logout</button>
     </div>
     <div class="tabs">
-      <button class="tab-btn active" data-tab="locationsTab">Locations</button>
+      <button class="tab-btn active" data-tab="dailyTab">Daily</button>
       <button class="tab-btn" data-tab="hourlyTab">Hourly</button>
-      <button class="tab-btn" data-tab="dailyTab">Daily</button>
+      <button class="tab-btn" data-tab="locationsTab">Locations</button>
+      <button class="tab-btn" data-tab="usersTab">Users</button>
       <button class="tab-btn" data-tab="apiKeysTab">API Keys</button>
       <button class="tab-btn" data-tab="configTab">Config</button>
-      <button class="tab-btn" data-tab="usersTab">Users</button>
     </div>
 
-    <div id="locationsTab" class="tab-panel active">
+    <div id="dailyTab" class="tab-panel active">
+      <h2>Daily Overview</h2>
+      <div class="flex-row">
+        <label>
+          Location:
+          <select id="dailyLocationSelect">
+            <option value="">Loading...</option>
+          </select>
+        </label>
+        <label>
+          Start Date:
+          <input type="date" id="dailyStartDate" />
+        </label>
+        <label>
+          End Date:
+          <input type="date" id="dailyEndDate" />
+        </label>
+        <label>
+          Mode:
+          <select id="dailyMode">
+            <option value="overview">Overview</option>
+            <option value="segments">Segments</option>
+          </select>
+        </label>
+        <button id="loadDailyBtn">Load</button>
+      </div>
+      <table id="dailyTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Snow (in)</th>
+            <th>High (°F)</th>
+            <th>Low (°F)</th>
+            <th>Avg Wind (mph)</th>
+            <th>Conditions</th>
+            <th>Precip (in)</th>
+            <th>Precip %</th>
+            <th>Cloud %</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="dailyStatus" class="status"></div>
+    </div>
+
+    <div id="hourlyTab" class="tab-panel">
+      <h2>Hourly Weather</h2>
+      <div class="flex-row">
+        <label>
+          Location:
+          <select id="hourlyLocationSelect">
+            <option value="">Loading...</option>
+          </select>
+        </label>
+        <label>
+          Start Date:
+          <input type="date" id="hourlyStartDate" />
+        </label>
+        <label>
+          End Date:
+          <input type="date" id="hourlyEndDate" />
+        </label>
+        <button id="loadHourlyBtn">Load</button>
+      </div>
+      <table id="hourlyTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Date/Time</th>
+            <th>Snow (in)</th>
+            <th>Temp (°F)</th>
+            <th>Wind (mph)</th>
+            <th>Feels Like</th>
+            <th>Conditions</th>
+            <th>Precip (in)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="hourlyStatus" class="status"></div>
+    </div>
+
+    <div id="locationsTab" class="tab-panel">
       <h2>Locations</h2>
       <h3>Add Location</h3>
       <form id="locationForm" class="flex-row">
