@@ -60,6 +60,8 @@ app.use(cookieParser());
 
 app.post('/auth/request-link', (req, res, next) => frontendAuth.handleRequestMagicLink(req, res, next));
 app.get('/auth/verify', (req, res, next) => frontendAuth.handleVerifyMagicLink(req, res, next));
+app.post('/auth/verify', (req, res, next) => frontendAuth.handleVerifyToken(req, res, next));
+app.post('/auth/refresh', (req, res, next) => frontendAuth.handleRefresh(req, res, next));
 app.get('/auth/session', (req, res, next) => frontendAuth.handleSessionStatus(req, res, next));
 app.post('/auth/logout', (req, res, next) => frontendAuth.handleLogout(req, res, next));
 
