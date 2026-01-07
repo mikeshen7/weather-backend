@@ -58,7 +58,7 @@ function buildMagicLink(token, redirectPath) {
 
 async function sendMagicLinkEmail(email, link) {
   const expiresMinutes = getMagicTtlMinutes();
-  const subject = 'Weather Forecast login link';
+  const subject = 'Snowcast login link';
   const text = [
     'Your login link:',
     link,
