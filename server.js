@@ -15,14 +15,10 @@ const appConfig = require('./modules/appConfig');
 const adminConfig = require('./modules/adminConfig');
 const {
   requireAdminSession,
-  requireRole,
   handleRequestMagicLink,
   handleVerifyMagicLink,
   handleSessionStatus,
   handleLogout,
-  OWNER_ROLE,
-  ADMIN_ROLE,
-  READONLY_ROLE,
 } = require('./modules/adminAuth');
 const { requireClientApiKey } = require('./modules/clientAuth');
 const { trackUsage } = require('./modules/usageTracker');
@@ -83,28 +79,28 @@ if (ADMIN_ENABLED) {
 
   app.use('/admin', adminRateLimit);
 
-  app.post('/locations', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointCreateLocation(request, response, next));
-  app.delete('/locations/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointDeleteLocation(request, response, next));
-  app.put('/locations/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (request, response, next) => locations.endpointUpdateLocation(request, response, next));
+  app.post('/locations', requireAdminSession, (request, response, next) => locations.endpointCreateLocation(request, response, next));
+  app.delete('/locations/:id', requireAdminSession, (request, response, next) => locations.endpointDeleteLocation(request, response, next));
+  app.put('/locations/:id', requireAdminSession, (request, response, next) => locations.endpointUpdateLocation(request, response, next));
 
   app.post('/admin/auth/request-link', (req, res, next) => handleRequestMagicLink(req, res, next));
   app.get('/admin/auth/verify', (req, res, next) => handleVerifyMagicLink(req, res, next));
   app.get('/admin/auth/session', (req, res, next) => handleSessionStatus(req, res, next));
   app.post('/admin/auth/logout', (req, res, next) => handleLogout(req, res, next));
 
-  app.get('/admin/config', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
-  app.put('/admin/config/:key', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
-  app.get('/admin/api-clients', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointListClients(req, res, next));
-  app.post('/admin/api-clients', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointCreateClient(req, res, next));
-  app.put('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
-  app.post('/admin/api-clients/:id/toggle', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
-  app.delete('/admin/api-clients/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
-  app.get('/admin/api-clients/:id/access', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminApiClients.endpointGetClientAccess(req, res, next));
+  app.get('/admin/config', requireAdminSession, (req, res, next) => adminConfig.endpointGetConfig(req, res, next));
+  app.put('/admin/config/:key', requireAdminSession, (req, res, next) => adminConfig.endpointUpdateConfig(req, res, next));
+  app.get('/admin/api-clients', requireAdminSession, (req, res, next) => adminApiClients.endpointListClients(req, res, next));
+  app.post('/admin/api-clients', requireAdminSession, (req, res, next) => adminApiClients.endpointCreateClient(req, res, next));
+  app.put('/admin/api-clients/:id', requireAdminSession, (req, res, next) => adminApiClients.endpointUpdateClient(req, res, next));
+  app.post('/admin/api-clients/:id/toggle', requireAdminSession, (req, res, next) => adminApiClients.endpointToggleClient(req, res, next));
+  app.delete('/admin/api-clients/:id', requireAdminSession, (req, res, next) => adminApiClients.endpointDeleteClient(req, res, next));
+  app.get('/admin/api-clients/:id/access', requireAdminSession, (req, res, next) => adminApiClients.endpointGetClientAccess(req, res, next));
 
-  app.get('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.listUsers(req, res, next));
-  app.post('/admin/users', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.createUser(req, res, next));
-  app.put('/admin/users/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.updateUser(req, res, next));
-  app.delete('/admin/users/:id', requireAdminSession, requireRole([OWNER_ROLE, ADMIN_ROLE]), (req, res, next) => adminUsers.deleteUser(req, res, next));
+  app.get('/admin/users', requireAdminSession, (req, res, next) => adminUsers.listUsers(req, res, next));
+  app.post('/admin/users', requireAdminSession, (req, res, next) => adminUsers.createUser(req, res, next));
+  app.put('/admin/users/:id', requireAdminSession, (req, res, next) => adminUsers.updateUser(req, res, next));
+  app.delete('/admin/users/:id', requireAdminSession, (req, res, next) => adminUsers.deleteUser(req, res, next));
 } else {
   console.log('Admin endpoints disabled; set ADMIN_ENABLED=true to enable admin routes and UI.');
 }

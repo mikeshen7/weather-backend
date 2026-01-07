@@ -5,8 +5,8 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const collectionName = 'adminUsers';
-const allowedRoles = ['owner', 'admin', 'read-only'];
-const allowedLocationAccess = ['all', 'resort-only', 'non-resort-only'];
+const allowedRoles = ['owner', 'admin', 'basic', 'standard', 'advanced'];
+const allowedLocationAccess = ['all', 'resort-only'];
 
 const adminUserSchema = new Schema(
   {
@@ -15,13 +15,13 @@ const adminUserSchema = new Schema(
     roles: {
       type: [String],
       enum: allowedRoles,
-      default: ['admin'],
+      default: ['basic'],
       set: (values) => {
         const arr = Array.isArray(values) ? values : [values];
         const filtered = arr
           .map((v) => String(v || '').trim())
           .filter((v) => allowedRoles.includes(v));
-        return [...new Set(filtered)];
+        return filtered.slice(0, 1);
       },
     },
     locationAccess: {
@@ -29,6 +29,7 @@ const adminUserSchema = new Schema(
       enum: allowedLocationAccess,
       default: 'all',
     },
+    adminAccess: { type: Boolean, default: false },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     lastLoginAt: { type: Date },
     lastLoginIp: { type: String, default: '' },

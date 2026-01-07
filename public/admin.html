@@ -69,7 +69,7 @@
     <div id="authGate" class="auth-gate">
       <label for="loginEmail">Admin Email:</label>
       <input type="email" id="loginEmail" placeholder="name@example.com" />
-      <button id="sendLinkBtn">Send Magic Link</button>
+      <button id="sendLinkBtn">Send Login Link</button>
       <div id="authStatus" class="status"></div>
       <p style="margin:0.5rem 0 0;font-size:0.9rem;color:#555;">We’ll email a one-time link. Keep this page open, then click the link on the same browser.</p>
     </div>
@@ -310,8 +310,16 @@
         <label>Name<input type="text" id="adminUserName" placeholder="Optional" /></label>
         <label>Role
           <select id="adminUserRoleSelect">
-            <option value="admin">Admin (full access)</option>
-            <option value="read-only">Read-only (no writes, limited tabs)</option>
+            <option value="basic">Basic</option>
+            <option value="standard">Standard</option>
+            <option value="advanced">Advanced</option>
+            <option value="admin">Admin</option>
+          </select>
+        </label>
+        <label>Backend Admin
+          <select id="adminUserAdminAccess">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
           </select>
         </label>
         <label>Status
@@ -320,11 +328,10 @@
             <option value="suspended">Suspended</option>
           </select>
         </label>
-        <label>Location Access
+        <label>Location Type
           <select id="adminUserLocationAccess">
             <option value="all">All Locations</option>
             <option value="resort-only">Resort Only</option>
-            <option value="non-resort-only">Non-Resort Only</option>
           </select>
         </label>
         <div class="form-actions">
@@ -339,8 +346,9 @@
           <tr>
             <th>Email</th>
             <th>Name</th>
-            <th>Roles</th>
-            <th>Location Access</th>
+            <th>Frontend Role</th>
+            <th>Backend Admin</th>
+            <th>Location Type</th>
             <th>Status</th>
             <th>Last Login</th>
             <th>Created</th>
@@ -474,8 +482,7 @@
       sessionUser = user;
       sessionLocationAccess = user?.locationAccess || 'all';
       const roles = Array.isArray(user?.roles) ? user.roles : [];
-      const isOwnerOrAdmin = roles.includes('owner') || roles.includes('admin');
-      const isReadOnly = roles.includes('read-only') && !isOwnerOrAdmin;
+      const isBackendAdmin = Boolean(user?.adminAccess) || roles.includes('owner');
       authGate.classList.add('hidden');
       appContent.classList.remove('hidden');
       const statusText = sessionStatus?.querySelector('span');
@@ -486,7 +493,7 @@
         logoutBtn.classList.remove('hidden');
       }
       showToast('Admin access granted');
-      if (isOwnerOrAdmin) {
+      if (isBackendAdmin) {
         loadConfig();
         loadApiClients();
         loadAdminUsers();
@@ -533,9 +540,6 @@
         if (locationResortSelect) {
           locationResortSelect.value = 'true';
         }
-        if (resortLabel) resortLabel.style.display = 'none';
-      } else if (sessionLocationAccess === 'non-resort-only') {
-        if (locationResortSelect) locationResortSelect.value = 'false';
         if (resortLabel) resortLabel.style.display = 'none';
       } else {
         if (resortLabel) resortLabel.style.display = '';
@@ -697,6 +701,7 @@
     const adminUserRoleSelect = document.getElementById('adminUserRoleSelect');
     const adminUserStatusSelect = document.getElementById('adminUserStatus');
     const adminUserLocationAccess = document.getElementById('adminUserLocationAccess');
+    const adminUserAdminAccess = document.getElementById('adminUserAdminAccess');
     const adminUserSubmitBtn = document.getElementById('adminUserSubmitBtn');
     const adminUserCancelBtn = document.getElementById('adminUserCancelBtn');
     const adminUserRefreshBtn = document.getElementById('adminUserRefreshBtn');
@@ -765,8 +770,6 @@
       if (query) params.set('q', query);
       if (sessionLocationAccess === 'resort-only') {
         params.set('isSkiResort', 'true');
-      } else if (sessionLocationAccess === 'non-resort-only') {
-        params.set('isSkiResort', 'false');
       } else if (resort) {
         params.set('isSkiResort', resort);
       }
@@ -789,7 +792,7 @@
         return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
       });
       sorted.forEach((loc) => {
-        const isReadOnly = Array.isArray(sessionUser?.roles) && sessionUser.roles.includes('read-only') && !(sessionUser.roles.includes('owner') || sessionUser.roles.includes('admin'));
+        const isReadOnly = !(Array.isArray(sessionUser?.roles) && (sessionUser.roles.includes('owner') || sessionUser.roles.includes('admin')));
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${loc.name}</td>
@@ -1249,7 +1252,6 @@
         const data = await res.json();
         const filtered = (data || []).filter((loc) => {
           if (sessionLocationAccess === 'resort-only') return Boolean(loc.isSkiResort);
-          if (sessionLocationAccess === 'non-resort-only') return !loc.isSkiResort;
           return true;
         });
         const sorted = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
@@ -1304,6 +1306,7 @@
           <td>${user.email || ''}</td>
           <td>${user.name || ''}</td>
           <td>${Array.isArray(user.roles) ? user.roles.join(', ') : ''}</td>
+          <td>${user.adminAccess || isOwner ? 'Yes' : 'No'}</td>
           <td>${user.locationAccess || 'all'}</td>
           <td>${user.status || ''}</td>
           <td>${formatDateTimeLocal(user.lastLoginAt)}</td>
@@ -1341,9 +1344,11 @@
       const editingId = adminUserId?.value;
       const email = adminUserEmail?.value.trim();
       const name = adminUserName?.value.trim();
-      const roles = adminUserRoleSelect ? [adminUserRoleSelect.value] : ['admin'];
+      const isOwner = adminUserForm?.dataset?.isOwner === 'true';
+      const roles = adminUserRoleSelect ? [adminUserRoleSelect.value] : ['basic'];
       const status = adminUserStatusSelect ? adminUserStatusSelect.value : 'active';
       const locationAccess = adminUserLocationAccess ? adminUserLocationAccess.value : 'all';
+      const adminAccess = adminUserAdminAccess?.value === 'true';
       if (!email) {
         adminUsersStatus.textContent = 'Email is required';
         return;
@@ -1352,7 +1357,9 @@
       try {
         const endpoint = editingId ? `/admin/users/${editingId}` : '/admin/users';
         const method = editingId ? 'PUT' : 'POST';
-        const payload = editingId ? { name, roles, status, locationAccess } : { email, name, roles, locationAccess };
+        const payload = editingId
+          ? buildAdminUpdatePayload({ name, roles, status, locationAccess, adminAccess, isOwner })
+          : { email, name, roles, locationAccess, adminAccess };
         const res = await authFetch(endpoint, {
           method,
           headers: { 'Content-Type': 'application/json' },
@@ -1397,14 +1404,15 @@
 
     function startEditAdmin(user) {
       if (!user) return;
+      const isOwner = Array.isArray(user.roles) && user.roles.includes('owner');
       if (adminUserId) adminUserId.value = user._id;
       if (adminUserEmail) {
         adminUserEmail.value = user.email || '';
         adminUserEmail.disabled = true;
       }
       if (adminUserName) adminUserName.value = user.name || '';
-      if (adminUserRoleSelect && Array.isArray(user.roles) && user.roles.length) {
-        adminUserRoleSelect.value = user.roles[0];
+      if (adminUserRoleSelect) {
+        adminUserRoleSelect.value = Array.isArray(user.roles) && user.roles.length ? user.roles[0] : 'basic';
       }
       if (adminUserStatusSelect) {
         adminUserStatusSelect.value = user.status || 'active';
@@ -1412,6 +1420,13 @@
       if (adminUserLocationAccess) {
         adminUserLocationAccess.value = user.locationAccess || 'all';
       }
+      if (adminUserAdminAccess) {
+        adminUserAdminAccess.value = user.adminAccess || isOwner ? 'true' : 'false';
+      }
+      if (adminUserForm) {
+        adminUserForm.dataset.isOwner = isOwner ? 'true' : 'false';
+      }
+      setOwnerFormState(isOwner);
       if (adminUserSubmitBtn) adminUserSubmitBtn.textContent = 'Save User';
       if (adminUserCancelBtn) adminUserCancelBtn.style.display = 'inline-block';
       adminUsersStatus.textContent = `Editing ${user.email || ''}`;
@@ -1421,12 +1436,35 @@
       if (adminUserForm) adminUserForm.reset();
       if (adminUserId) adminUserId.value = '';
       if (adminUserEmail) adminUserEmail.disabled = false;
-      if (adminUserRoleSelect) adminUserRoleSelect.value = 'admin';
+      if (adminUserRoleSelect) adminUserRoleSelect.value = 'basic';
       if (adminUserStatusSelect) adminUserStatusSelect.value = 'active';
       if (adminUserLocationAccess) adminUserLocationAccess.value = 'all';
+      if (adminUserAdminAccess) adminUserAdminAccess.value = 'false';
+      if (adminUserForm) delete adminUserForm.dataset.isOwner;
+      setOwnerFormState(false);
       if (adminUserSubmitBtn) adminUserSubmitBtn.textContent = 'Save User';
       if (adminUserCancelBtn) adminUserCancelBtn.style.display = 'none';
       adminUsersStatus.textContent = '';
+    }
+
+    function buildAdminUpdatePayload({ name, roles, status, locationAccess, adminAccess, isOwner }) {
+      if (isOwner) {
+        return { name };
+      }
+      return { name, roles, status, locationAccess, adminAccess };
+    }
+
+    function setOwnerFormState(isOwner) {
+      if (adminUserRoleSelect) adminUserRoleSelect.disabled = isOwner;
+      if (adminUserAdminAccess) adminUserAdminAccess.disabled = isOwner;
+      if (adminUserStatusSelect) adminUserStatusSelect.disabled = isOwner;
+      if (adminUserLocationAccess) adminUserLocationAccess.disabled = isOwner;
+      if (isOwner) {
+        if (adminUserRoleSelect) adminUserRoleSelect.value = 'owner';
+        if (adminUserAdminAccess) adminUserAdminAccess.value = 'true';
+        if (adminUserStatusSelect) adminUserStatusSelect.value = 'active';
+        if (adminUserLocationAccess) adminUserLocationAccess.value = 'all';
+      }
     }
 
     async function deleteAdmin(user) {

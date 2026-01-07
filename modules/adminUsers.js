@@ -1,9 +1,10 @@
 'use strict';
 
 const adminUserDb = require('../models/adminUserDb');
-const { OWNER_ROLE, ADMIN_ROLE, READONLY_ROLE } = require('./adminAuth');
-const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, READONLY_ROLE]);
-const ALLOWED_LOCATION_ACCESS = new Set(['all', 'resort-only', 'non-resort-only']);
+const { OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE } = require('./adminAuth');
+const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE]);
+const ALLOWED_LOCATION_ACCESS = new Set(['all', 'resort-only']);
+const BOOTSTRAP_EMAIL = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
 
 async function listUsers(request, response, next) {
   try {
@@ -17,11 +18,14 @@ async function listUsers(request, response, next) {
 
 async function createUser(request, response, next) {
   try {
-    const { email, name, roles, locationAccess } = request.body || {};
+    const { email, name, roles, locationAccess, adminAccess } = request.body || {};
     if (!email) {
       return response.status(400).send('email is required');
     }
     const normalizedEmail = String(email).trim().toLowerCase();
+    if (BOOTSTRAP_EMAIL && normalizedEmail === BOOTSTRAP_EMAIL) {
+      return response.status(403).send('Owner is managed via bootstrap email');
+    }
     const existing = await adminUserDb.findOne({ email: normalizedEmail });
     if (existing) {
       return response.status(400).send('User already exists');
@@ -31,11 +35,13 @@ async function createUser(request, response, next) {
       return response.status(403).send('Cannot create owner via API');
     }
     const parsedAccess = parseLocationAccess(locationAccess);
+    const parsedAdminAccess = parseAdminAccess(adminAccess);
     const user = await adminUserDb.create({
       email: normalizedEmail,
       name: name ? String(name).trim() : '',
-      roles: parsedRoles.length ? parsedRoles : [ADMIN_ROLE],
+      roles: parsedRoles.length ? parsedRoles : [BASIC_ROLE],
       locationAccess: parsedAccess || 'all',
+      adminAccess: parsedAdminAccess,
       status: 'active',
     });
     return response.status(201).send(user);
@@ -48,7 +54,7 @@ async function createUser(request, response, next) {
 async function updateUser(request, response, next) {
   try {
     const { id } = request.params;
-    const { name, roles, status, locationAccess } = request.body || {};
+    const { name, roles, status, locationAccess, adminAccess } = request.body || {};
     const update = {};
     if (name !== undefined) update.name = String(name || '').trim();
     if (roles !== undefined) {
@@ -56,7 +62,7 @@ async function updateUser(request, response, next) {
       if (parsedRoles.includes(OWNER_ROLE)) {
         return response.status(403).send('Cannot assign owner role');
       }
-      update.roles = parsedRoles.length ? parsedRoles : [ADMIN_ROLE];
+      update.roles = parsedRoles.length ? parsedRoles : [BASIC_ROLE];
     }
     if (status === 'active' || status === 'suspended') {
       update.status = status;
@@ -67,13 +73,24 @@ async function updateUser(request, response, next) {
         update.locationAccess = parsedAccess;
       }
     }
+    if (adminAccess !== undefined) {
+      update.adminAccess = parseAdminAccess(adminAccess);
+    }
+    const existing = await adminUserDb.findById(id);
+    if (!existing) {
+      return response.status(404).send('User not found');
+    }
+    const isOwner = (existing.roles || []).includes(OWNER_ROLE) || (BOOTSTRAP_EMAIL && existing.email === BOOTSTRAP_EMAIL);
+    if (isOwner) {
+      update.roles = [OWNER_ROLE];
+      update.status = 'active';
+      update.locationAccess = 'all';
+      update.adminAccess = true;
+    }
     if (!Object.keys(update).length) {
       return response.status(400).send('No valid fields provided');
     }
     const user = await adminUserDb.findByIdAndUpdate(id, update, { new: true });
-    if (!user) {
-      return response.status(404).send('User not found');
-    }
     return response.status(200).send(user);
   } catch (error) {
     console.error('*** adminUsers update error:', error.message);
@@ -88,7 +105,7 @@ async function deleteUser(request, response, next) {
     if (!user) {
       return response.status(404).send('User not found');
     }
-    if (user.roles && user.roles.includes(OWNER_ROLE)) {
+    if ((user.roles && user.roles.includes(OWNER_ROLE)) || (BOOTSTRAP_EMAIL && user.email === BOOTSTRAP_EMAIL)) {
       return response.status(403).send('Cannot delete owner');
     }
     await adminUserDb.findByIdAndDelete(id);
@@ -107,14 +124,21 @@ module.exports = {
 };
 
 function parseRoles(roles) {
-  if (!Array.isArray(roles)) return [];
-  return roles
+  const list = Array.isArray(roles) ? roles : roles ? [roles] : [];
+  return list
     .map((r) => String(r).trim())
-    .filter((r) => ALLOWED_ROLES.has(r));
+    .filter((r) => ALLOWED_ROLES.has(r))
+    .slice(0, 1);
 }
 
 function parseLocationAccess(value) {
   if (!value) return '';
   const normalized = String(value).trim();
   return ALLOWED_LOCATION_ACCESS.has(normalized) ? normalized : '';
+}
+
+function parseAdminAccess(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'boolean') return value;
+  return String(value).trim().toLowerCase() === 'true';
 }

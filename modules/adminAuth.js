@@ -16,8 +16,10 @@ const COOKIE_SECURE = process.env.ADMIN_COOKIE_SECURE === 'true';
 const BOOTSTRAP_EMAIL = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
 const OWNER_ROLE = 'owner';
 const ADMIN_ROLE = 'admin';
-const READONLY_ROLE = 'read-only';
-const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, READONLY_ROLE]);
+const BASIC_ROLE = 'basic';
+const STANDARD_ROLE = 'standard';
+const ADVANCED_ROLE = 'advanced';
+const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE]);
 
 function getSessionTtlMinutes() {
   return Number(appConfig.values().ADMIN_SESSION_TTL_MINUTES) || 60;
@@ -112,8 +114,9 @@ function createSessionToken(user) {
     throw new Error('ADMIN_SESSION_SECRET is not configured');
   }
   const sessionTtlMinutes = getSessionTtlMinutes();
+  const normalizedRoles = (user.roles || []).filter((r) => ALLOWED_ROLES.has(r)).slice(0, 1);
   return jwt.sign(
-    { uid: String(user._id), email: user.email, roles: user.roles || [] },
+    { uid: String(user._id), email: user.email, roles: normalizedRoles },
     SESSION_SECRET,
     { expiresIn: `${sessionTtlMinutes}m` }
   );
@@ -141,11 +144,27 @@ async function handleRequestMagicLink(request, response) {
   console.log(JSON.stringify({ event: 'admin_magic_link_request_received', email }));
   let user = await adminUserDb.findOne({ email, status: 'active' });
   if (!user && BOOTSTRAP_EMAIL && email === BOOTSTRAP_EMAIL) {
-    user = await adminUserDb.create({ email, status: 'active', roles: [OWNER_ROLE, ADMIN_ROLE] });
+    user = await adminUserDb.create({
+      email,
+      status: 'active',
+      roles: [OWNER_ROLE],
+      locationAccess: 'all',
+      adminAccess: true,
+    });
     console.log('Bootstrap admin user created for', email);
+  }
+  if (user && BOOTSTRAP_EMAIL && email === BOOTSTRAP_EMAIL) {
+    user.roles = [OWNER_ROLE];
+    user.status = 'active';
+    user.locationAccess = 'all';
+    user.adminAccess = true;
+    await user.save();
   }
   if (!user) {
     // Avoid email enumeration; respond success even if user not found.
+    return response.status(200).send({ ok: true });
+  }
+  if (!user.adminAccess && !(user.roles || []).includes(OWNER_ROLE)) {
     return response.status(200).send({ ok: true });
   }
 
@@ -257,9 +276,15 @@ async function handleSessionStatus(request, response) {
     response.clearCookie(COOKIE_NAME);
     return response.status(403).send({ authenticated: false });
   }
+  const isOwner = (adminUser.roles || []).includes(OWNER_ROLE);
   return response.status(200).send({
     authenticated: true,
-    user: { email: adminUser.email, roles: adminUser.roles || [], locationAccess: adminUser.locationAccess || 'all' },
+    user: {
+      email: adminUser.email,
+      roles: adminUser.roles || [],
+      locationAccess: adminUser.locationAccess || 'all',
+      adminAccess: isOwner ? true : Boolean(adminUser.adminAccess),
+    },
   });
 }
 
@@ -281,11 +306,17 @@ async function getAdminUserFromRequest(request) {
   if (!user || user.status !== 'active') {
     return null;
   }
+  if (!user.adminAccess && !(user.roles || []).includes(OWNER_ROLE)) {
+    return null;
+  }
+  const normalizedRoles = (user.roles || []).filter((r) => ALLOWED_ROLES.has(r)).slice(0, 1);
+  const isOwner = normalizedRoles.includes(OWNER_ROLE);
   return {
     id: String(user._id),
     email: user.email,
-    roles: (user.roles || []).filter((r) => ALLOWED_ROLES.has(r)),
-    locationAccess: user.locationAccess || 'all',
+    roles: normalizedRoles,
+    locationAccess: isOwner ? 'all' : user.locationAccess || 'all',
+    adminAccess: isOwner ? true : Boolean(user.adminAccess),
   };
 }
 
@@ -299,5 +330,7 @@ module.exports = {
   getAdminUserFromRequest,
   OWNER_ROLE,
   ADMIN_ROLE,
-  READONLY_ROLE,
+  BASIC_ROLE,
+  STANDARD_ROLE,
+  ADVANCED_ROLE,
 };
