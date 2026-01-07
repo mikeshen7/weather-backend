@@ -13,6 +13,7 @@ const weatherHourly = require('./modules/weatherHourly');
 const weatherDaily = require('./modules/weatherDaily');
 const appConfig = require('./modules/appConfig');
 const adminConfig = require('./modules/adminConfig');
+const frontendAuth = require('./modules/frontendAuth');
 const {
   requireAdminSession,
   handleRequestMagicLink,
@@ -40,9 +41,19 @@ mongoose.set('strictQuery', false);
 
 // *** Server and middleware connection
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: ['http://localhost:3000'],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
+
+app.post('/auth/request-link', (req, res, next) => frontendAuth.handleRequestMagicLink(req, res, next));
+app.get('/auth/verify', (req, res, next) => frontendAuth.handleVerifyMagicLink(req, res, next));
+app.get('/auth/session', (req, res, next) => frontendAuth.handleSessionStatus(req, res, next));
+app.post('/auth/logout', (req, res, next) => frontendAuth.handleLogout(req, res, next));
 
 // *** Admin UI gate
 app.get('/admin.html', (request, response, next) => {
