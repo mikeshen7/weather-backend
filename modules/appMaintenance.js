@@ -42,7 +42,7 @@ async function fetchAllWeather(options = {}) {
 }
 
 // backfillAllWeather fetches historical windows (and optionally future data).
-async function backfillAllWeather(daysBack = appConfig.values().BACKFILL_DAYS, { includeFuture = false } = {}) {
+async function backfillAllWeather(daysBack = appConfig.values().DB_BACKFILL_DAYS, { includeFuture = false } = {}) {
   try {
     const config = appConfig.values();
     const endDate = formatDate(new Date());
@@ -89,7 +89,7 @@ async function removeOrphanHourlyWeather() {
 async function removeOldHourlyWeather() {
   try {
     const config = appConfig.values();
-    const cutoff = Date.now() - config.DAYS_TO_KEEP * config.MS_PER_DAY;
+    const cutoff = Date.now() - config.DB_DAYS_TO_KEEP * config.MS_PER_DAY;
     const result = await hourlyWeatherDb.deleteMany({ dateTimeEpoch: { $lt: cutoff } });
     console.log(JSON.stringify({
       event: 'old_hourly_weather_removed',
@@ -105,14 +105,14 @@ function startMaintenance() {
   console.log('Starting maintenance loops');
   removeOrphanHourlyWeather();
   removeOldHourlyWeather();
-  backfillAllWeather(appConfig.values().BACKFILL_DAYS, { includeFuture: true });
+  backfillAllWeather(appConfig.values().DB_BACKFILL_DAYS, { includeFuture: true });
 
   const config = appConfig.values();
   const hourMs = config.MS_PER_DAY / 24;
-  setInterval(removeOrphanHourlyWeather, config.CLEAN_INTERVAL_HOURS * hourMs);
-  setInterval(removeOldHourlyWeather, config.CLEAN_INTERVAL_HOURS * hourMs);
-  setInterval(fetchAllWeather, config.FETCH_INTERVAL_HOURS * hourMs);
-  setInterval(() => backfillAllWeather(config.BACKFILL_DAYS), config.BACKFILL_INTERVAL_HOURS * hourMs);
+  setInterval(removeOrphanHourlyWeather, config.DB_CLEAN_INTERVAL_HOURS * hourMs);
+  setInterval(removeOldHourlyWeather, config.DB_CLEAN_INTERVAL_HOURS * hourMs);
+  setInterval(fetchAllWeather, config.DB_FETCH_INTERVAL_HOURS * hourMs);
+  setInterval(() => backfillAllWeather(config.DB_BACKFILL_DAYS), config.DB_BACKFILL_INTERVAL_HOURS * hourMs);
   setInterval(appConfig.refreshConfigCache, config.CONFIG_REFRESH_INTERVAL_HOURS * hourMs);
 }
 

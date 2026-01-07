@@ -22,8 +22,8 @@ async function endpointDailyOverview(request, response, next) {
       sort: request.query.sort,
       startDateEpoch,
       endDateEpoch,
-      maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
-      maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
+      maxDaysBack: appConfig.values().WEATHER_API_MAX_DAYS_BACK,
+      maxDaysForward: appConfig.values().WEATHER_API_MAX_DAYS_FORWARD,
     });
 
     const days = aggregateDailyOverview(docs, location?.tz_iana);
@@ -59,8 +59,8 @@ async function endpointDailyOverviewByCoords(request, response, next) {
       sort: request.query.sort,
       startDateEpoch,
       endDateEpoch,
-      maxDaysBack: appConfig.values().SEGMENT_MAX_DAYS_BACK,
-      maxDaysForward: appConfig.values().SEGMENT_MAX_DAYS_FORWARD,
+      maxDaysBack: appConfig.values().WEATHER_API_MAX_DAYS_BACK,
+      maxDaysForward: appConfig.values().WEATHER_API_MAX_DAYS_FORWARD,
     });
 
     const days = aggregateDailyOverview(docs, location?.tz_iana);

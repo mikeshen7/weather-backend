@@ -40,7 +40,7 @@ async function deriveCountryRegion(lat, lon) {
 }
 
 async function ensureLocationNotTooClose(lat, lon, excludeId) {
-  const radiusMi = appConfig.values().LOCATION_RADIUS_MI;
+  const radiusMi = appConfig.values().LOCATION_STORE_RADIUS_MI;
   if (!radiusMi || radiusMi <= 0) {
     return;
   }

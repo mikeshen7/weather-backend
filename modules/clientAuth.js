@@ -4,7 +4,7 @@ const apiClientDb = require('../models/apiClientDb');
 const { hashKey } = require('./apiClients');
 const { getAdminUserFromRequest } = require('./adminAuth');
 
-const HEADER_NAME = process.env.CLIENT_API_KEY_HEADER || 'x-api-key';
+const HEADER_NAME = 'x-api-key';
 
 async function requireClientApiKey(request, response, next) {
   try {

@@ -2,18 +2,17 @@
 
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const axios = require('axios');
 const adminUserDb = require('../models/adminUserDb');
 const adminMagicTokenDb = require('../models/adminMagicTokenDb');
 const appConfig = require('./appConfig');
+const { sendEmail } = require('./email');
 
-const ADMIN_ENABLED = process.env.ADMIN_ENABLED === 'true';
+const ADMIN_ENABLED = process.env.BACKEND_ADMIN_ENABLED === 'true';
 const COOKIE_NAME = 'adminSession';
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET;
-const MAGIC_LINK_BASE_URL = process.env.ADMIN_MAGIC_LINK_BASE_URL;
-const COOKIE_SECURE = process.env.ADMIN_COOKIE_SECURE === 'true';
-const BOOTSTRAP_EMAIL = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
+const SESSION_SECRET = process.env.BACKEND_SESSION_SECRET;
+const BACKEND_URL = process.env.BACKEND_URL;
+const COOKIE_SECURE = process.env.BACKEND_COOKIE_SECURE === 'true';
+const BOOTSTRAP_EMAIL = (process.env.BACKEND_OWNER_EMAIL || '').trim().toLowerCase();
 const OWNER_ROLE = 'owner';
 const ADMIN_ROLE = 'admin';
 const BASIC_ROLE = 'basic';
@@ -22,7 +21,11 @@ const ADVANCED_ROLE = 'advanced';
 const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE]);
 
 function getSessionTtlMinutes() {
-  return Number(appConfig.values().ADMIN_SESSION_TTL_MINUTES) || 60;
+  return Number(appConfig.values().TTL_BACKEND_SESSION_MINUTES) || 60;
+}
+
+function getMagicTtlMinutes() {
+  return Number(appConfig.values().TTL_AUTH_TOKEN_MINUTES) || 15;
 }
 
 function hashToken(token) {
@@ -36,36 +39,17 @@ function safeRedirectPath(raw) {
 }
 
 function buildMagicLink(token, redirectPath) {
-  if (!MAGIC_LINK_BASE_URL) {
-    throw new Error('ADMIN_MAGIC_LINK_BASE_URL not configured');
+  if (!BACKEND_URL) {
+    throw new Error('BACKEND_URL not configured');
   }
-  const url = new URL('/admin/auth/verify', MAGIC_LINK_BASE_URL);
+  const url = new URL('/admin/auth/verify', BACKEND_URL);
   url.searchParams.set('token', token);
   url.searchParams.set('redirect', safeRedirectPath(redirectPath));
   return url.toString();
 }
 
-let cachedTransporter;
-function getTransporter() {
-  if (cachedTransporter) return cachedTransporter;
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error('SMTP configuration is missing');
-  }
-  cachedTransporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 465,
-    secure: process.env.SMTP_SECURE !== 'false',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-  return cachedTransporter;
-}
-
 async function sendMagicLinkEmail(email, link) {
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const expiresMinutes = Number(appConfig.values().ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
+  const expiresMinutes = getMagicTtlMinutes();
   const subject = 'Weather Forecast backend admin login link';
   const text = [
     'Your admin login link:',
@@ -74,39 +58,7 @@ async function sendMagicLinkEmail(email, link) {
     `This link expires in ${expiresMinutes} minutes.`,
     'If you did not request it, you can ignore this email.',
   ].join('\n');
-
-  if (process.env.BREVO_API_KEY) {
-    await sendViaBrevo({ to: email, from, subject, text });
-    return;
-  }
-
-  const transporter = getTransporter();
-  await transporter.sendMail({
-    from,
-    to: email,
-    subject,
-    text,
-  });
-}
-
-async function sendViaBrevo({ to, from, subject, text }) {
-  if (!from) {
-    throw new Error('SMTP_FROM is required for Brevo sender');
-  }
-  const apiKey = process.env.BREVO_API_KEY;
-  const payload = {
-    sender: { email: from },
-    to: [{ email: to }],
-    subject,
-    textContent: text,
-  };
-  await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
-    headers: {
-      'api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    timeout: 10000,
-  });
+  await sendEmail({ to: email, subject, text });
 }
 
 function createSessionToken(user) {
@@ -135,7 +87,7 @@ async function handleRequestMagicLink(request, response) {
   if (!ADMIN_ENABLED) {
     return response.status(404).send('Not available');
   }
-  const magicTtlMinutes = Number(appConfig.values().ADMIN_MAGIC_TOKEN_TTL_MINUTES) || 15;
+  const magicTtlMinutes = getMagicTtlMinutes();
   const email = (request.body?.email || '').trim().toLowerCase();
   if (!email) {
     return response.status(400).send('email is required');

@@ -6,11 +6,13 @@ const appConfig = require('./appConfig');
 async function endpointGetConfig(request, response, next) {
   try {
     const map = appConfig.getConfigMap();
-    const entries = Object.entries(appConfig.DEFAULT_CONFIG).map(([key, meta]) => ({
-      key,
-      description: meta.description,
-      value: map[key] ?? meta.value,
-    }));
+    const entries = Object.entries(appConfig.DEFAULT_CONFIG)
+      .map(([key, meta]) => ({
+        key,
+        description: meta.description,
+        value: map[key] ?? meta.value,
+      }))
+      .sort((a, b) => a.key.localeCompare(b.key));
     return response.status(200).send(entries);
   } catch (error) {
     next(error);

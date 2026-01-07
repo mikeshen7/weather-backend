@@ -2,110 +2,89 @@
 
 const appConfigDb = require('../models/appConfigDb');
 
-const rateLimitDefault = Number(process.env.CLIENT_API_RATE_LIMIT_DEFAULT);
-const dailyQuotaDefault = Number(process.env.CLIENT_API_DAILY_QUOTA_DEFAULT);
-const adminRateLimitMaxDefault = Number(process.env.ADMIN_RATE_LIMIT_MAX);
-const adminSessionTtlDefault = Number(process.env.ADMIN_SESSION_TTL_MINUTES);
-const adminMagicTtlDefault = Number(process.env.ADMIN_MAGIC_TOKEN_TTL_MINUTES);
-
 const defaults = {
   MS_PER_DAY: 24 * 60 * 60 * 1000,
-  DEFAULT_DAYS_BACK: 3,
-  DEFAULT_DAYS_FORWARD: 14,
-  MAX_DAYS_BACK: 60,
-  MAX_DAYS_FORWARD: 14,
-  SEGMENT_MAX_DAYS_BACK: 7,
-  SEGMENT_MAX_DAYS_FORWARD: 14,
-  BACKFILL_DAYS: 14,
-  FETCH_INTERVAL_HOURS: 2,
-  CLEAN_INTERVAL_HOURS: 24,
-  BACKFILL_INTERVAL_HOURS: 24,
-  DAYS_TO_KEEP: 60,
-  FETCH_RADIUS_MI: 30,
+  WEATHER_API_MAX_DAYS_BACK: 60,
+  WEATHER_API_MAX_DAYS_FORWARD: 14,
+  DB_BACKFILL_DAYS: 14,
+  DB_FETCH_INTERVAL_HOURS: 2,
+  DB_CLEAN_INTERVAL_HOURS: 24,
+  DB_BACKFILL_INTERVAL_HOURS: 24,
+  DB_DAYS_TO_KEEP: 60,
+  LOCATION_FETCH_RADIUS_MI: 30,
   CONFIG_REFRESH_INTERVAL_HOURS: 24,
-  LOCATION_RADIUS_MI: 5,
-  CLIENT_RATE_LIMIT_DEFAULT: Number.isFinite(rateLimitDefault) ? rateLimitDefault : 60,
-  CLIENT_DAILY_QUOTA_DEFAULT: Number.isFinite(dailyQuotaDefault) ? dailyQuotaDefault : 5000,
-  ADMIN_RATE_LIMIT_MAX: Number.isFinite(adminRateLimitMaxDefault) ? adminRateLimitMaxDefault : 60,
-  ADMIN_SESSION_TTL_MINUTES: Number.isFinite(adminSessionTtlDefault) ? adminSessionTtlDefault : 60,
-  ADMIN_MAGIC_TOKEN_TTL_MINUTES: Number.isFinite(adminMagicTtlDefault) ? adminMagicTtlDefault : 15,
+  LOCATION_STORE_RADIUS_MI: 5,
+  API_CLIENT_RATE_LIMIT_DEFAULT: 60,
+  API_CLIENT_DAILY_QUOTA_DEFAULT: 5000,
+  RATE_LIMIT_ADMIN: 60,
+  TTL_BACKEND_SESSION_MINUTES: 60,
+  TTL_AUTH_TOKEN_MINUTES: 15,
+  TTL_FRONTEND_SESSION_MINUTES: 1440,
 };
 
 const DEFAULT_CONFIG = {
-  DEFAULT_DAYS_BACK: {
-    value: defaults.DEFAULT_DAYS_BACK,
-    description: 'Default lookback (days) for hourly queries.'
-  },
-  DEFAULT_DAYS_FORWARD: {
-    value: defaults.DEFAULT_DAYS_FORWARD,
-    description: 'Default look-forward (days) for hourly queries.'
-  },
-  MAX_DAYS_BACK: {
-    value: defaults.MAX_DAYS_BACK,
+  WEATHER_API_MAX_DAYS_BACK: {
+    value: defaults.WEATHER_API_MAX_DAYS_BACK,
     description: 'Maximum historical days allowed for queries.'
   },
-  MAX_DAYS_FORWARD: {
-    value: defaults.MAX_DAYS_FORWARD,
+  WEATHER_API_MAX_DAYS_FORWARD: {
+    value: defaults.WEATHER_API_MAX_DAYS_FORWARD,
     description: 'Maximum future days allowed from provider.'
   },
-  SEGMENT_MAX_DAYS_BACK: {
-    value: defaults.SEGMENT_MAX_DAYS_BACK,
-    description: 'Max historical days for daily segments.'
-  },
-  SEGMENT_MAX_DAYS_FORWARD: {
-    value: defaults.SEGMENT_MAX_DAYS_FORWARD,
-    description: 'Max future days for daily segments.'
-  },
-  BACKFILL_DAYS: {
-    value: defaults.BACKFILL_DAYS,
+  DB_BACKFILL_DAYS: {
+    value: defaults.DB_BACKFILL_DAYS,
     description: 'Days of history to backfill on startup.'
   },
-  FETCH_INTERVAL_HOURS: {
-    value: defaults.FETCH_INTERVAL_HOURS,
+  DB_FETCH_INTERVAL_HOURS: {
+    value: defaults.DB_FETCH_INTERVAL_HOURS,
     description: 'Interval for forecast fetch jobs (hours).'
   },
-  CLEAN_INTERVAL_HOURS: {
-    value: defaults.CLEAN_INTERVAL_HOURS,
+  DB_CLEAN_INTERVAL_HOURS: {
+    value: defaults.DB_CLEAN_INTERVAL_HOURS,
     description: 'Interval for cleanup jobs (hours).'
   },
-  BACKFILL_INTERVAL_HOURS: {
-    value: defaults.BACKFILL_INTERVAL_HOURS,
+  DB_BACKFILL_INTERVAL_HOURS: {
+    value: defaults.DB_BACKFILL_INTERVAL_HOURS,
     description: 'Interval between automatic backfills (hours).'
   },
-  DAYS_TO_KEEP: {
-    value: defaults.DAYS_TO_KEEP,
+  DB_DAYS_TO_KEEP: {
+    value: defaults.DB_DAYS_TO_KEEP,
     description: 'Number of days of hourly data to retain.'
   },
-  FETCH_RADIUS_MI: {
-    value: defaults.FETCH_RADIUS_MI,
+  LOCATION_FETCH_RADIUS_MI: {
+    value: defaults.LOCATION_FETCH_RADIUS_MI,
     description: 'Max distance (miles) when searching nearest location.'
   },
   CONFIG_REFRESH_INTERVAL_HOURS: {
     value: defaults.CONFIG_REFRESH_INTERVAL_HOURS,
     description: 'Interval between automatic config cache refreshes (hours).'
   },
-  LOCATION_RADIUS_MI: {
-    value: defaults.LOCATION_RADIUS_MI,
+  LOCATION_STORE_RADIUS_MI: {
+    value: defaults.LOCATION_STORE_RADIUS_MI,
     description: 'Minimum allowed distance (miles) between stored locations.'
   },
-  CLIENT_RATE_LIMIT_DEFAULT: {
-    value: defaults.CLIENT_RATE_LIMIT_DEFAULT,
+  API_CLIENT_RATE_LIMIT_DEFAULT: {
+    value: defaults.API_CLIENT_RATE_LIMIT_DEFAULT,
     description: 'Default per-minute request limit for new API clients (set <=0 for unlimited).'
   },
-  CLIENT_DAILY_QUOTA_DEFAULT: {
-    value: defaults.CLIENT_DAILY_QUOTA_DEFAULT,
+  API_CLIENT_DAILY_QUOTA_DEFAULT: {
+    value: defaults.API_CLIENT_DAILY_QUOTA_DEFAULT,
     description: 'Default daily request quota for new API clients (set <=0 for unlimited).'
   },
-  ADMIN_RATE_LIMIT_MAX: {
-    value: defaults.ADMIN_RATE_LIMIT_MAX,
+  RATE_LIMIT_ADMIN: {
+    value: defaults.RATE_LIMIT_ADMIN,
     description: 'Max admin requests per minute (0 or negative = unlimited).'
   },
-  ADMIN_SESSION_TTL_MINUTES: {
-    value: defaults.ADMIN_SESSION_TTL_MINUTES,
-    description: 'Admin session lifetime in minutes.'
+  TTL_BACKEND_SESSION_MINUTES: {
+    value: defaults.TTL_BACKEND_SESSION_MINUTES,
+    description: 'Backend admin session lifetime in minutes.'
   },
-  ADMIN_MAGIC_TOKEN_TTL_MINUTES: {
-    value: defaults.ADMIN_MAGIC_TOKEN_TTL_MINUTES,
+  TTL_FRONTEND_SESSION_MINUTES: {
+    value: defaults.TTL_FRONTEND_SESSION_MINUTES,
+    description: 'Frontend session lifetime in minutes.'
+  },
+  TTL_AUTH_TOKEN_MINUTES: {
+    value: defaults.TTL_AUTH_TOKEN_MINUTES,
     description: 'Magic-link token lifetime in minutes.'
   },
 };
@@ -173,25 +152,22 @@ async function setConfigValue(key, value) {
 function buildValuesFromCache() {
   return {
     MS_PER_DAY: defaults.MS_PER_DAY,
-    DEFAULT_DAYS_BACK: readValue('DEFAULT_DAYS_BACK', defaults.DEFAULT_DAYS_BACK),
-    DEFAULT_DAYS_FORWARD: readValue('DEFAULT_DAYS_FORWARD', defaults.DEFAULT_DAYS_FORWARD),
-    MAX_DAYS_BACK: readValue('MAX_DAYS_BACK', defaults.MAX_DAYS_BACK),
-    MAX_DAYS_FORWARD: readValue('MAX_DAYS_FORWARD', defaults.MAX_DAYS_FORWARD),
-    SEGMENT_MAX_DAYS_BACK: readValue('SEGMENT_MAX_DAYS_BACK', defaults.SEGMENT_MAX_DAYS_BACK),
-    SEGMENT_MAX_DAYS_FORWARD: readValue('SEGMENT_MAX_DAYS_FORWARD', defaults.SEGMENT_MAX_DAYS_FORWARD),
-    BACKFILL_DAYS: readValue('BACKFILL_DAYS', defaults.BACKFILL_DAYS),
-    FETCH_INTERVAL_HOURS: readValue('FETCH_INTERVAL_HOURS', defaults.FETCH_INTERVAL_HOURS),
-    CLEAN_INTERVAL_HOURS: readValue('CLEAN_INTERVAL_HOURS', defaults.CLEAN_INTERVAL_HOURS),
-    BACKFILL_INTERVAL_HOURS: readValue('BACKFILL_INTERVAL_HOURS', defaults.BACKFILL_INTERVAL_HOURS),
-    DAYS_TO_KEEP: readValue('DAYS_TO_KEEP', defaults.DAYS_TO_KEEP),
-    FETCH_RADIUS_MI: readValue('FETCH_RADIUS_MI', defaults.FETCH_RADIUS_MI),
+    WEATHER_API_MAX_DAYS_BACK: readValue('WEATHER_API_MAX_DAYS_BACK', defaults.WEATHER_API_MAX_DAYS_BACK),
+    WEATHER_API_MAX_DAYS_FORWARD: readValue('WEATHER_API_MAX_DAYS_FORWARD', defaults.WEATHER_API_MAX_DAYS_FORWARD),
+    DB_BACKFILL_DAYS: readValue('DB_BACKFILL_DAYS', defaults.DB_BACKFILL_DAYS),
+    DB_FETCH_INTERVAL_HOURS: readValue('DB_FETCH_INTERVAL_HOURS', defaults.DB_FETCH_INTERVAL_HOURS),
+    DB_CLEAN_INTERVAL_HOURS: readValue('DB_CLEAN_INTERVAL_HOURS', defaults.DB_CLEAN_INTERVAL_HOURS),
+    DB_BACKFILL_INTERVAL_HOURS: readValue('DB_BACKFILL_INTERVAL_HOURS', defaults.DB_BACKFILL_INTERVAL_HOURS),
+    DB_DAYS_TO_KEEP: readValue('DB_DAYS_TO_KEEP', defaults.DB_DAYS_TO_KEEP),
+    LOCATION_FETCH_RADIUS_MI: readValue('LOCATION_FETCH_RADIUS_MI', defaults.LOCATION_FETCH_RADIUS_MI),
     CONFIG_REFRESH_INTERVAL_HOURS: readValue('CONFIG_REFRESH_INTERVAL_HOURS', defaults.CONFIG_REFRESH_INTERVAL_HOURS),
-    LOCATION_RADIUS_MI: readValue('LOCATION_RADIUS_MI', defaults.LOCATION_RADIUS_MI),
-    CLIENT_RATE_LIMIT_DEFAULT: readValue('CLIENT_RATE_LIMIT_DEFAULT', defaults.CLIENT_RATE_LIMIT_DEFAULT),
-    CLIENT_DAILY_QUOTA_DEFAULT: readValue('CLIENT_DAILY_QUOTA_DEFAULT', defaults.CLIENT_DAILY_QUOTA_DEFAULT),
-    ADMIN_RATE_LIMIT_MAX: readValue('ADMIN_RATE_LIMIT_MAX', defaults.ADMIN_RATE_LIMIT_MAX),
-    ADMIN_SESSION_TTL_MINUTES: readValue('ADMIN_SESSION_TTL_MINUTES', defaults.ADMIN_SESSION_TTL_MINUTES),
-    ADMIN_MAGIC_TOKEN_TTL_MINUTES: readValue('ADMIN_MAGIC_TOKEN_TTL_MINUTES', defaults.ADMIN_MAGIC_TOKEN_TTL_MINUTES),
+    LOCATION_STORE_RADIUS_MI: readValue('LOCATION_STORE_RADIUS_MI', defaults.LOCATION_STORE_RADIUS_MI),
+    API_CLIENT_RATE_LIMIT_DEFAULT: readValue('API_CLIENT_RATE_LIMIT_DEFAULT', defaults.API_CLIENT_RATE_LIMIT_DEFAULT),
+    API_CLIENT_DAILY_QUOTA_DEFAULT: readValue('API_CLIENT_DAILY_QUOTA_DEFAULT', defaults.API_CLIENT_DAILY_QUOTA_DEFAULT),
+    RATE_LIMIT_ADMIN: readValue('RATE_LIMIT_ADMIN', defaults.RATE_LIMIT_ADMIN),
+    TTL_BACKEND_SESSION_MINUTES: readValue('TTL_BACKEND_SESSION_MINUTES', defaults.TTL_BACKEND_SESSION_MINUTES),
+    TTL_FRONTEND_SESSION_MINUTES: readValue('TTL_FRONTEND_SESSION_MINUTES', defaults.TTL_FRONTEND_SESSION_MINUTES),
+    TTL_AUTH_TOKEN_MINUTES: readValue('TTL_AUTH_TOKEN_MINUTES', defaults.TTL_AUTH_TOKEN_MINUTES),
   };
 }
 

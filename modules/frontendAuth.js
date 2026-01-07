@@ -5,21 +5,23 @@ const jwt = require('jsonwebtoken');
 const adminUserDb = require('../models/adminUserDb');
 const frontendMagicTokenDb = require('../models/frontendMagicTokenDb');
 const { sendEmail } = require('./email');
+const appConfig = require('./appConfig');
 
 const COOKIE_NAME = 'frontendSession';
 const SESSION_SECRET = process.env.FRONTEND_SESSION_SECRET;
-const MAGIC_LINK_BASE_URL = process.env.FRONTEND_MAGIC_LINK_BASE_URL;
-const REDIRECT_BASE_URL = process.env.FRONTEND_REDIRECT_BASE_URL || '';
-const COOKIE_SECURE = process.env.FRONTEND_COOKIE_SECURE === 'true';
-const COOKIE_SAMESITE = process.env.FRONTEND_COOKIE_SAMESITE || 'strict';
-const ALLOW_NEW_USERS = process.env.FRONTEND_ALLOW_NEW_USERS === 'true';
+const BACKEND_URL = process.env.BACKEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || '';
+const IS_DEV = process.env.BACKEND_DEV === 'true';
+const COOKIE_SECURE = IS_DEV ? false : process.env.FRONTEND_COOKIE_SECURE === 'true';
+const COOKIE_SAMESITE = IS_DEV ? 'lax' : process.env.FRONTEND_COOKIE_SAMESITE || 'none';
+const ALLOW_NEW_USERS = process.env.AUTH_ALLOW_NEW_USERS === 'true';
 
 function getSessionTtlMinutes() {
-  return Number(process.env.FRONTEND_SESSION_TTL_MINUTES) || 60;
+  return Number(appConfig.values().TTL_FRONTEND_SESSION_MINUTES) || 60;
 }
 
 function getMagicTtlMinutes() {
-  return Number(process.env.FRONTEND_MAGIC_TOKEN_TTL_MINUTES) || 15;
+  return Number(appConfig.values().TTL_AUTH_TOKEN_MINUTES) || 15;
 }
 
 function hashToken(token) {
@@ -33,11 +35,11 @@ function safeRedirectPath(raw) {
 }
 
 function buildRedirectTarget(path) {
-  if (!REDIRECT_BASE_URL) {
+  if (!FRONTEND_URL) {
     return path;
   }
   try {
-    const base = new URL(REDIRECT_BASE_URL);
+    const base = new URL(FRONTEND_URL);
     return new URL(path, base).toString();
   } catch (error) {
     return path;
@@ -45,10 +47,10 @@ function buildRedirectTarget(path) {
 }
 
 function buildMagicLink(token, redirectPath) {
-  if (!MAGIC_LINK_BASE_URL) {
-    throw new Error('FRONTEND_MAGIC_LINK_BASE_URL not configured');
+  if (!BACKEND_URL) {
+    throw new Error('BACKEND_URL not configured');
   }
-  const url = new URL('/auth/verify', MAGIC_LINK_BASE_URL);
+  const url = new URL('/auth/verify', BACKEND_URL);
   url.searchParams.set('token', token);
   url.searchParams.set('redirect', safeRedirectPath(redirectPath));
   return url.toString();

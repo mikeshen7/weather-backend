@@ -104,13 +104,7 @@ async function queryHourlyDocs(options) {
   const timeZone = location?.tz_iana || 'UTC';
 
   const config = appConfig.values();
-  const {
-    DEFAULT_DAYS_BACK,
-    DEFAULT_DAYS_FORWARD,
-    MS_PER_DAY,
-    MAX_DAYS_BACK,
-    MAX_DAYS_FORWARD,
-  } = config;
+  const { MS_PER_DAY, WEATHER_API_MAX_DAYS_BACK, WEATHER_API_MAX_DAYS_FORWARD } = config;
   const filter = { locationId };
 
   let effectiveStart;
@@ -119,8 +113,8 @@ async function queryHourlyDocs(options) {
     effectiveStart = startDateEpoch;
     effectiveEnd = endDateEpoch;
   } else {
-    const backDays = clampDays(daysBack, DEFAULT_DAYS_BACK, maxDaysBack ?? MAX_DAYS_BACK);
-    const forwardDays = clampDays(daysForward, DEFAULT_DAYS_FORWARD, maxDaysForward ?? MAX_DAYS_FORWARD);
+    const backDays = clampDays(daysBack, 3, maxDaysBack ?? WEATHER_API_MAX_DAYS_BACK);
+    const forwardDays = clampDays(daysForward, 14, maxDaysForward ?? WEATHER_API_MAX_DAYS_FORWARD);
     const nowParts = getLocalPartsFromUtc(Date.now(), timeZone);
     const baseDateParts = nowParts
       ? { year: nowParts.year, month: nowParts.month, day: nowParts.day }
@@ -191,7 +185,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 // findNearestLocation returns the closest stored location within bounds.
-async function findNearestLocation(lat, lon, maxDistanceMi = appConfig.values().FETCH_RADIUS_MI) {
+async function findNearestLocation(lat, lon, maxDistanceMi = appConfig.values().LOCATION_FETCH_RADIUS_MI) {
   const maxDistanceKm = maxDistanceMi * 1.60934;
   const deltaLat = maxDistanceKm / 111;
   const deltaLon = deltaLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);

@@ -289,7 +289,7 @@
     </div>
 
     <div id="configTab" class="tab-panel">
-      <h2>Config Constants</h2>
+      <h2>Config Settings</h2>
       <div>
         <button id="loadBtn">Reload Config</button>
       </div>
@@ -630,8 +630,8 @@
 
     function updateApiDefaultsFromConfig(entries) {
       if (!Array.isArray(entries)) return;
-      const rateEntry = entries.find((entry) => entry.key === 'CLIENT_RATE_LIMIT_DEFAULT');
-      const quotaEntry = entries.find((entry) => entry.key === 'CLIENT_DAILY_QUOTA_DEFAULT');
+      const rateEntry = entries.find((entry) => entry.key === 'API_CLIENT_RATE_LIMIT_DEFAULT');
+      const quotaEntry = entries.find((entry) => entry.key === 'API_CLIENT_DAILY_QUOTA_DEFAULT');
 
       if (rateEntry && apiClientRateInput) {
         const numericRate = Number(rateEntry.value);

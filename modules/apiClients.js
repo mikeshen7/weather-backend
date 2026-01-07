@@ -4,14 +4,14 @@ const crypto = require('crypto');
 const apiClientDb = require('../models/apiClientDb');
 const appConfig = require('./appConfig');
 
-const { CLIENT_API_KEY_HASH_SECRET } = process.env;
+const { CLIENT_API_SESSION_SECRET } = process.env;
 
 function hashKey(rawKey) {
-  if (!CLIENT_API_KEY_HASH_SECRET) {
-    throw new Error('CLIENT_API_KEY_HASH_SECRET is not configured');
+  if (!CLIENT_API_SESSION_SECRET) {
+    throw new Error('CLIENT_API_SESSION_SECRET is not configured');
   }
   return crypto
-    .createHmac('sha256', CLIENT_API_KEY_HASH_SECRET)
+    .createHmac('sha256', CLIENT_API_SESSION_SECRET)
     .update(String(rawKey).trim())
     .digest('hex');
 }
@@ -24,10 +24,10 @@ async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQu
   const configValues = appConfig.values();
   const resolvedRateLimit = Number.isFinite(Number(rateLimitPerMin))
     ? Number(rateLimitPerMin)
-    : Number(configValues.CLIENT_RATE_LIMIT_DEFAULT);
+    : Number(configValues.API_CLIENT_RATE_LIMIT_DEFAULT);
   const resolvedDailyQuota = Number.isFinite(Number(dailyQuota))
     ? Number(dailyQuota)
-    : Number(configValues.CLIENT_DAILY_QUOTA_DEFAULT);
+    : Number(configValues.API_CLIENT_DAILY_QUOTA_DEFAULT);
   const rawKey = generateApiKey();
   const keyHash = hashKey(rawKey);
   const doc = await apiClientDb.create({
@@ -35,8 +35,8 @@ async function createClient({ name, contactEmail, plan, rateLimitPerMin, dailyQu
     contactEmail: contactEmail ? String(contactEmail).trim() : '',
     keyHash,
     plan: plan ? String(plan).trim() : undefined,
-    rateLimitPerMin: Number.isFinite(resolvedRateLimit) ? resolvedRateLimit : configValues.CLIENT_RATE_LIMIT_DEFAULT,
-    dailyQuota: Number.isFinite(resolvedDailyQuota) ? resolvedDailyQuota : configValues.CLIENT_DAILY_QUOTA_DEFAULT,
+    rateLimitPerMin: Number.isFinite(resolvedRateLimit) ? resolvedRateLimit : configValues.API_CLIENT_RATE_LIMIT_DEFAULT,
+    dailyQuota: Number.isFinite(resolvedDailyQuota) ? resolvedDailyQuota : configValues.API_CLIENT_DAILY_QUOTA_DEFAULT,
     latestPlainApiKey: '', // do not persist plaintext API key
     metadata,
   });

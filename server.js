@@ -26,7 +26,7 @@ const { trackUsage } = require('./modules/usageTracker');
 const adminApiClients = require('./modules/adminApiClients');
 const adminUsers = require('./modules/adminUsers');
 const { createFixedWindowRateLimiter } = require('./modules/rateLimit');
-const ADMIN_ENABLED = process.env.ADMIN_ENABLED === 'true';
+const ADMIN_ENABLED = process.env.BACKEND_ADMIN_ENABLED === 'true';
 
 // *** Database connection and test
 const databaseName = process.env.DB_NAME || 'weather';
@@ -41,10 +41,14 @@ mongoose.set('strictQuery', false);
 
 // *** Server and middleware connection
 const app = express();
-const frontendCorsOrigins = (process.env.FRONTEND_CORS_ORIGINS || 'http://localhost:3000')
+const isDev = process.env.BACKEND_DEV === 'true';
+const frontendCorsOrigins = (process.env.CORS_FRONTEND_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+if (isDev) {
+  frontendCorsOrigins.push('http://localhost:3000', 'http://127.0.0.1:3000');
+}
 app.use(
   cors({
     origin: frontendCorsOrigins,
@@ -68,7 +72,7 @@ app.get('/admin.html', (request, response, next) => {
 });
 
 app.use(express.static('public'));
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.BACKEND_PORT || 3001;
 app.listen(PORT, () => console.log(`server listening on ${PORT}`));
 
 // *** Location Endpoints
@@ -88,7 +92,7 @@ app.get('/weather/daily/segments/by-coords', (request, response, next) => weathe
 // *** Admin-only Endpoints
 if (ADMIN_ENABLED) {
   const adminRateLimit = createFixedWindowRateLimiter({
-    max: () => appConfig.values().ADMIN_RATE_LIMIT_MAX,
+    max: () => appConfig.values().RATE_LIMIT_ADMIN,
     windowMs: 60_000,
   });
 

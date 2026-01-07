@@ -8,7 +8,7 @@ Express + MongoDB backend for weather by location (resorts, ZIP centroids, any c
 
 (Open-Meteo needs no API key.)
 
-Admin is disabled by default; to use admin routes/UI locally set `ADMIN_ENABLED=true` and configure magic-link auth + SMTP (see Admin section).
+Admin is disabled by default; to use admin routes/UI locally set `BACKEND_ADMIN_ENABLED=true` and configure magic-link auth (see Admin section).
 
 2) Install deps:
 npm install
@@ -20,27 +20,35 @@ npm install
 
 ### API access & rate limiting
 
-- Every client must include an API key in the `x-api-key` header (configurable via `CLIENT_API_KEY_HEADER`).
-- Admin-only endpoints under `/admin/api-clients` let you list clients, mint new keys (the raw key is returned once), and toggle active/revoked status. They only mount when `ADMIN_ENABLED=true` and you’re signed in via an admin session.
-- The Admin UI (`/admin.html`) is served only when `ADMIN_ENABLED=true`; it includes an “API Keys” tab for issuing keys, viewing usage stats (including today’s call count), editing rate limits, copying the current key, revoking/reactivating clients, and deleting keys without touching curl. Admin auth uses email-based magic links and sets a short-lived HttpOnly session cookie (no tokens in localStorage).
-- Default per-minute and daily quotas for new API clients are editable in the Config tab via `CLIENT_RATE_LIMIT_DEFAULT` and `CLIENT_DAILY_QUOTA_DEFAULT`, so you can raise/lower plan defaults without touching env vars.
-- Requests are rate limited with a token bucket backed by Mongo (`CLIENT_API_RATE_WINDOW_MIN`, `CLIENT_API_RATE_LIMIT_DEFAULT`, `CLIENT_API_DAILY_QUOTA_DEFAULT` control defaults). per-client overrides live on the client document.
+- Every client must include an API key in the `x-api-key` header.
+- Admin-only endpoints under `/admin/api-clients` let you list clients, mint new keys (the raw key is returned once), and toggle active/revoked status. They only mount when `BACKEND_ADMIN_ENABLED=true` and you’re signed in via an admin session.
+- The Admin UI (`/admin.html`) is served only when `BACKEND_ADMIN_ENABLED=true`; it includes an “API Keys” tab for issuing keys, viewing usage stats (including today’s call count), editing rate limits, copying the current key, revoking/reactivating clients, and deleting keys without touching curl. Admin auth uses email-based magic links and sets a short-lived HttpOnly session cookie (no tokens in localStorage).
+- Default per-minute and daily quotas for new API clients are editable in the Config tab via `API_CLIENT_RATE_LIMIT_DEFAULT` and `API_CLIENT_DAILY_QUOTA_DEFAULT`, so you can raise/lower plan defaults without touching env vars.
+- Requests are rate limited with a token bucket backed by Mongo (`CLIENT_API_RATE_LIMIT_DEFAULT`, `CLIENT_API_DAILY_QUOTA_DEFAULT` in the Config UI control defaults). per-client overrides live on the client document.
 - Usage stats (`totalUsage`, `lastUsedAt`) are updated on each request. Counters reset automatically as the TTL’d usage windows expire.
 - Admin Users tab lets you list admins, create new ones (email/name/roles), and suspend/reactivate accounts.
 
 ### Admin auth (magic links)
 
-- Set `ADMIN_ENABLED=true` plus:
-  - `ADMIN_MAGIC_LINK_BASE_URL` (e.g. `http://localhost:3001` for dev),
-  - `ADMIN_SESSION_SECRET` (strong random string),
-  - `ADMIN_COOKIE_SECURE` (`false` for local HTTP, `true` for HTTPS),
-  - `ADMIN_BOOTSTRAP_EMAIL` to allow creating the first admin when they request a link.
-- SMTP (Gmail example): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=<gmail address>`, `SMTP_PASS=<app password>`, `SMTP_FROM=<from address>`. Gmail requires an App Password.
-- Brevo HTTP API (SMTP-free): set `BREVO_API_KEY` and `SMTP_FROM`; the app will send magic links via Brevo’s API when the key is present.
+- Set `BACKEND_ADMIN_ENABLED=true` plus:
+  - `BACKEND_URL` (e.g. `http://localhost:3001` for dev),
+  - `BACKEND_SESSION_SECRET` (strong random string),
+  - `BACKEND_COOKIE_SECURE` (`false` for local HTTP, `true` for HTTPS),
+  - `BACKEND_OWNER_EMAIL` to allow creating the owner when they request a link.
+- Brevo HTTP API: set `BREVO_API_KEY`, `BREVO_API_ENDPOINT_URL`, and `SMTP_FROM`; the app sends magic links via Brevo.
 - Flow: enter admin email on `/admin.html` → backend emails a one-time link → clicking it sets an HttpOnly admin session cookie and redirects back. Logout clears the cookie. Admin requests rely on the session, not bearer tokens.
-- Roles: bootstrap email gets `owner` + `admin`; new users can be `admin` (full) or `read-only`. Read-only users can view Locations/Hourly/Daily but cannot modify locations or access API Keys/Config/Admins tabs.
-- Admin rate limit (requests per minute) is configurable via Config UI (`ADMIN_RATE_LIMIT_MAX` key).
-  - Session/magic token lifetimes are configurable via Config UI (`ADMIN_SESSION_TTL_MINUTES`, `ADMIN_MAGIC_TOKEN_TTL_MINUTES`).
+- Roles: owner is set by `BACKEND_OWNER_EMAIL`. Users have a single role (`basic`, `standard`, `advanced`, `admin`, or `owner`) which affects frontend access. Backend admin access is controlled by the Backend Admin flag (or owner).
+- Admin rate limit (requests per minute) is configurable via Config UI (`RATE_LIMIT_ADMIN` key).
+  - Session/magic token lifetimes are configurable via Config UI (`TTL_BACKEND_SESSION_MINUTES`, `TTL_FRONTEND_SESSION_MINUTES`, `TTL_AUTH_TOKEN_MINUTES`).
+
+### Config UI keys (runtime settings)
+
+- `TTL_BACKEND_SESSION_MINUTES`: Backend admin session lifetime.
+- `TTL_FRONTEND_SESSION_MINUTES`: Frontend session lifetime.
+- `TTL_AUTH_TOKEN_MINUTES`: Magic-link token lifetime (admin + frontend).
+- `API_CLIENT_RATE_LIMIT_DEFAULT`: Default per-minute limit for new API clients.
+- `API_CLIENT_DAILY_QUOTA_DEFAULT`: Default daily quota for new API clients.
+- `RATE_LIMIT_ADMIN`: Max admin requests per minute.
 
 ## Endpoints (key ones)
 

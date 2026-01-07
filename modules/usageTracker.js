@@ -8,10 +8,8 @@ const appConfig = require('./appConfig');
 const { sendEmail } = require('./email');
 const adminUserDb = require('../models/adminUserDb');
 
-const WINDOW_MINUTES = Number(process.env.CLIENT_API_RATE_WINDOW_MIN) || 1;
-
 function getWindowStart(date = new Date()) {
-  const windowSizeMs = WINDOW_MINUTES * 60 * 1000;
+  const windowSizeMs = 60 * 1000;
   return new Date(Math.floor(date.getTime() / windowSizeMs) * windowSizeMs);
 }
 
@@ -20,7 +18,7 @@ function getDayKey(date = new Date()) {
 }
 
 function resolveDefaultRateLimit() {
-  const configValue = Number(appConfig.values().CLIENT_RATE_LIMIT_DEFAULT);
+  const configValue = Number(appConfig.values().API_CLIENT_RATE_LIMIT_DEFAULT);
   if (Number.isFinite(configValue)) {
     return configValue;
   }
@@ -32,7 +30,7 @@ function resolveDefaultRateLimit() {
 }
 
 function resolveDefaultDailyQuota() {
-  const configValue = Number(appConfig.values().CLIENT_DAILY_QUOTA_DEFAULT);
+  const configValue = Number(appConfig.values().API_CLIENT_DAILY_QUOTA_DEFAULT);
   if (Number.isFinite(configValue)) {
     return configValue;
   }

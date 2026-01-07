@@ -4,7 +4,7 @@ const adminUserDb = require('../models/adminUserDb');
 const { OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE } = require('./adminAuth');
 const ALLOWED_ROLES = new Set([OWNER_ROLE, ADMIN_ROLE, BASIC_ROLE, STANDARD_ROLE, ADVANCED_ROLE]);
 const ALLOWED_LOCATION_ACCESS = new Set(['all', 'resort-only']);
-const BOOTSTRAP_EMAIL = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
+const BOOTSTRAP_EMAIL = (process.env.BACKEND_OWNER_EMAIL || '').trim().toLowerCase();
 
 async function listUsers(request, response, next) {
   try {
