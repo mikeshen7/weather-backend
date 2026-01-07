@@ -41,9 +41,13 @@ mongoose.set('strictQuery', false);
 
 // *** Server and middleware connection
 const app = express();
+const frontendCorsOrigins = (process.env.FRONTEND_CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 app.use(
   cors({
-    origin: ['http://localhost:3000'],
+    origin: frontendCorsOrigins,
     credentials: true,
   })
 );

@@ -11,6 +11,7 @@ const SESSION_SECRET = process.env.FRONTEND_SESSION_SECRET;
 const MAGIC_LINK_BASE_URL = process.env.FRONTEND_MAGIC_LINK_BASE_URL;
 const REDIRECT_BASE_URL = process.env.FRONTEND_REDIRECT_BASE_URL || '';
 const COOKIE_SECURE = process.env.FRONTEND_COOKIE_SECURE === 'true';
+const COOKIE_SAMESITE = process.env.FRONTEND_COOKIE_SAMESITE || 'strict';
 const ALLOW_NEW_USERS = process.env.FRONTEND_ALLOW_NEW_USERS === 'true';
 
 function getSessionTtlMinutes() {
@@ -175,7 +176,7 @@ async function handleVerifyMagicLink(request, response) {
   response.cookie(COOKIE_NAME, sessionToken, {
     httpOnly: true,
     secure: COOKIE_SECURE,
-    sameSite: 'strict',
+    sameSite: COOKIE_SAMESITE,
     maxAge: sessionTtlMinutes * 60 * 1000,
     path: '/',
   });
